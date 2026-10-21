@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -83,6 +83,15 @@
   .wrow .down{color:var(--ok);text-align:right}
   .wrow .up{color:var(--warn);text-align:right}
   .wrow span:last-child{text-align:right}
+  .src{display:inline-block;margin-top:8px;font-size:12px;color:var(--acc);text-decoration:none}
+  .myth{padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .myth span{color:var(--muted);font-size:13px}
+  .myth:last-child{border-bottom:0}
+  .erow{display:grid;grid-template-columns:1fr auto 28px;gap:10px;align-items:center;
+    padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
+  .erow:last-of-type{border-bottom:0}
+  .erow .eplan{color:var(--muted);font-size:13px;white-space:nowrap}
+  .erow .del{color:var(--muted);text-align:center;font-size:16px}
   .timer{position:fixed;left:12px;right:12px;bottom:calc(74px + env(safe-area-inset-bottom));
     background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;
     display:none;align-items:center;gap:10px;z-index:21;box-shadow:0 8px 24px rgba(0,0,0,.35)}
@@ -103,7 +112,7 @@
 </head>
 <body>
 <header>
-  <div class="ver" id="ver">v2.3</div>
+  <div class="ver" id="ver">v2.4</div>
   <h1 id="title">Сегодня</h1>
   <div class="sub" id="subtitle"></div>
 </header>
@@ -117,6 +126,7 @@
 <div class="nav">
   <button data-tab="today" class="on"><span class="ico">🏋️</span>Сегодня</button>
   <button data-tab="progress"><span class="ico">📈</span>Прогресс</button>
+  <button data-tab="science"><span class="ico">🔬</span>Наука</button>
   <button data-tab="settings"><span class="ico">⚙️</span>Ещё</button>
 </div>
 <script>
@@ -125,34 +135,37 @@ const PLAN = {
   отдых: 90,
   дни: [
     { wd:[2], группа:"спина и плечи", упражнения:[
-      {id:"pulldown", имя:"Тяга верхнего блока к груди", подходы:4, низ:8, верх:12},
-      {id:"row-supported", имя:"Тяга в тренажёре с упором в грудь", подходы:4, низ:8, верх:12},
-      {id:"pullover", имя:"Пуловер на верхнем блоке", подходы:3, низ:10, верх:12},
-      {id:"shoulder-press", имя:"Жим гантелей сидя (со спинкой)", подходы:4, низ:8, верх:12},
-      {id:"lateral-raise", имя:"Махи гантелями в стороны", подходы:3, низ:12, верх:15},
-      {id:"rear-delt", имя:"Разведения в наклоне (задняя дельта)", подходы:3, низ:12, верх:15}
+      {id:"pulldown", имя:"Тяга верхнего блока к груди", подходы:4, низ:8, верх:12, отдых:120},
+      {id:"row-supported", имя:"Тяга в тренажёре с упором в грудь", подходы:5, низ:8, верх:12, отдых:150},
+      {id:"pullover", имя:"Пуловер на верхнем блоке", подходы:3, низ:10, верх:12, отдых:90},
+      {id:"shoulder-press", имя:"Жим гантелей сидя (со спинкой)", подходы:4, низ:8, верх:12, отдых:150},
+      {id:"lateral-raise", имя:"Махи гантелями в стороны", подходы:4, низ:12, верх:15, отдых:75},
+      {id:"rear-delt", имя:"Разведения в наклоне (задняя дельта)", подходы:4, низ:12, верх:15, отдых:75}
     ]},
     { wd:[4], группа:"грудь и руки", упражнения:[
-      {id:"bench-press", имя:"Жим штанги лёжа", подходы:4, низ:8, верх:12},
-      {id:"incline-db", имя:"Жим гантелей на наклонной", подходы:3, низ:10, верх:12},
-      {id:"crossover", имя:"Сведения в кроссовере", подходы:3, низ:12, верх:15},
-      {id:"biceps-bar", имя:"Подъём штанги на бицепс", подходы:3, низ:10, верх:12},
-      {id:"triceps-pushdown", имя:"Разгибание на трицепс на блоке", подходы:3, низ:10, верх:12},
-      {id:"hammer-curl", имя:"Молотки сидя", подходы:3, низ:10, верх:12}
+      {id:"bench-press", имя:"Жим штанги лёжа", подходы:4, низ:6, верх:10, отдых:180},
+      {id:"incline-db", имя:"Жим гантелей на наклонной", подходы:3, низ:8, верх:12, отдых:120},
+      {id:"crossover", имя:"Сведения в кроссовере", подходы:3, низ:12, верх:15, отдых:75},
+      {id:"biceps-bar", имя:"Подъём штанги на бицепс", подходы:3, низ:10, верх:12, отдых:90},
+      {id:"triceps-pushdown", имя:"Разгибание на трицепс на блоке", подходы:3, низ:10, верх:12, отдых:75},
+      {id:"hammer-curl", имя:"Молотки сидя", подходы:3, низ:10, верх:12, отдых:90},
+      {id:"triceps-overhead", имя:"Разгибание из-за головы (трицепс)", подходы:3, низ:10, верх:12, отдых:75}
     ]},
     { wd:[6,0], группа:"ноги и пресс", упражнения:[
-      {id:"leg-press", имя:"Жим ногами", подходы:4, низ:10, верх:12},
-      {id:"leg-extension", имя:"Разгибание ног сидя", подходы:3, низ:12, верх:15},
-      {id:"leg-curl", имя:"Сгибание ног лёжа", подходы:3, низ:10, верх:15},
-      {id:"glute-bridge", имя:"Ягодичный мост с блином", подходы:3, низ:12, верх:15},
-      {id:"calf-raise", имя:"Подъём на носки", подходы:4, низ:15, верх:20},
-      {id:"dead-bug", имя:"Мёртвый жук", подходы:3, низ:8, верх:8}
+      {id:"leg-press", имя:"Жим ногами", подходы:4, низ:10, верх:12, отдых:180},
+      {id:"leg-extension", имя:"Разгибание ног сидя", подходы:4, низ:12, верх:15, отдых:90},
+      {id:"leg-curl", имя:"Сгибание ног лёжа", подходы:5, низ:10, верх:15, отдых:90},
+      {id:"single-leg-curl", имя:"Сгибание одной ногой", подходы:3, низ:10, верх:12, отдых:75},
+      {id:"glute-bridge", имя:"Ягодичный мост с блином", подходы:4, низ:12, верх:15, отдых:90},
+      {id:"calf-raise", имя:"Подъём на носки стоя", подходы:5, низ:15, верх:20, отдых:60},
+      {id:"seated-calf", имя:"Подъём на носки сидя", подходы:3, низ:15, верх:20, отдых:60},
+      {id:"dead-bug", имя:"Мёртвый жук", подходы:4, низ:8, верх:8, отдых:60}
     ]}
   ]
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
-const VERSION = "2.3";
+const VERSION = "2.4";
 
 /* Техника: короткие подсказки своими словами. Перед началом — 5–10 минут разминки. */
 const TIPS = {
@@ -205,6 +218,18 @@ const TIPS = {
     "Локти на месте, без раскачки",
     "Опускай медленнее, чем поднимаешь"],
     ошибки:"раскачивать корпус, отрывать локти, читинг" },
+  "triceps-overhead": { подсказки:["Локти смотрят вверх и остаются на месте",
+    "Разгибай предплечья за головой, растягивая трицепс внизу",
+    "Корпус не прогибается в пояснице — держи пресс в тонусе"],
+    ошибки:"разводить локти в стороны, прогибаться, брать слишком большой вес" },
+  "single-leg-curl": { подсказки:["Таз прижат, работай одной ногой медленно",
+    "Сгибай до комфортного угла, вверху — пауза",
+    "Вниз подконтрольно, без броска"],
+    ошибки:"помогать корпусом, разгонять вес, отрывать таз" },
+  "seated-calf": { подсказки:["Колени под валиками, стопы на платформе",
+    "Полная амплитуда: пятка вниз до растяжения, вверх до упора",
+    "Вверху задержка на секунду"],
+    ошибки:"пружинить, работать в короткой амплитуде, гнаться за весом" },
 
   "leg-press": { подсказки:["Поясница и таз прижаты к спинке — это главное при протрузии",
     "Колени идут по направлению стоп, не заваливаются внутрь",
@@ -231,21 +256,65 @@ const TIPS = {
     "Медленно, с выдохом, без спешки"],
     ошибки:"отрывать поясницу от пола, торопиться, делать на скорость" }
 };
+
+/* Наука: короткие выводы из обзоров, ссылки на PubMed. Полный разбор — наука.md */
+const НАУКА = [
+  { р:"Объём", т:"10–20 подходов на группу в неделю — рабочая зона. Ниже 8–10 роста почти нет, выше 20 выигрыш сомнителен, а усталость реальна.",
+    и:"Schoenfeld 2017, J Sports Sci", u:"https://pubmed.ncbi.nlm.nih.gov/27433992/" },
+  { р:"Частота", т:"1 или 2 раза в неделю на группу при равном объёме — почти одно и то же. Наш сплит не ошибка; важнее добрать подходы.",
+    и:"Schoenfeld 2019, J Sports Sci", u:"https://pubmed.ncbi.nlm.nih.gov/30558493/" },
+  { р:"Отказ", т:"Останавливаться за 1–2 повтора до отказа достаточно: RIR 0–5 дают сходную гипертрофию. Отказ в каждом подходе не нужен.",
+    и:"Refalo 2023, Sports Med", u:"https://pubmed.ncbi.nlm.nih.gov/36334240/" },
+  { р:"Повторы", т:"5–30 повторов при равном усилии растят мышцу сходно. «Малый вес на рельеф» — миф; решает близость к отказу.",
+    и:"Schoenfeld 2021, Sports", u:"https://pubmed.ncbi.nlm.nih.gov/33671664/" },
+  { р:"Отдых", т:"2–3 минуты между подходами базовых дают больше силы и массы, чем 1 минута. Короткий отдых — худшая экономия времени.",
+    и:"Schoenfeld 2016, J Strength Cond Res", u:"https://pubmed.ncbi.nlm.nih.gov/26605807/" },
+  { р:"Прогрессия", т:"Расти в повторах или в весе — работает и то, и другое. Считать надо тоннаж (кг × повторы), а не ощущения.",
+    и:"Plotkin 2022, PeerJ", u:"https://pubmed.ncbi.nlm.nih.gov/36199287/" },
+  { р:"Амплитуда", т:"Полная амплитуда с акцентом на растянутую часть. Растянутые партиалы — добавка, а не замена.",
+    и:"Pallarés 2021, Scand J Med Sci Sports", u:"https://pubmed.ncbi.nlm.nih.gov/34170576/" },
+  { р:"Травмы", т:"Риск снижает силовая работа, а не растяжка. Разминка 5–8 минут + 2 разминочных подхода.",
+    и:"Lauersen 2014, Br J Sports Med", u:"https://pubmed.ncbi.nlm.nih.gov/24100287/" },
+  { р:"Белок", т:"Ориентир 1,6 г/кг в сутки, порциями 25–40 г; дальше плато. При 80 кг — около 130 г.",
+    и:"Morton 2018, Br J Sports Med", u:"https://pubmed.ncbi.nlm.nih.gov/28698222/" },
+  { р:"Сон", т:"Меньше 6–7 часов — падают сила и восстановление. При плохом сне на этой неделе объём не повышаем.",
+    и:"Knowles 2018, J Sci Med Sport", u:"https://pubmed.ncbi.nlm.nih.gov/29422383/" },
+  { р:"Кардио", т:"150 минут умеренного в неделю не мешают росту мышц и сильно связаны с выживаемостью. Лучше после силовой или в день отдыха.",
+    и:"Schumann 2022, Sports Med", u:"https://pubmed.ncbi.nlm.nih.gov/34757594/" },
+  { р:"Поясница", т:"Опасна не нагрузка сама по себе, а «согнутая спина + вес + много повторов». Поэтому убраны наклоны и гиперэкстензия, а не нагрузка вообще.",
+    и:"Callaghan & McGill 2001, Clin Biomech", u:"https://pubmed.ncbi.nlm.nih.gov/11114441/" },
+  { р:"Поясница", т:"Давление в диске зависит от позы: лёжа и с опорой меньше, стоя и с осевой нагрузкой больше. Отсюда жим ногами, тяги с упором, мосты.",
+    и:"Rohlmann 2001, Ergonomics", u:"https://pubmed.ncbi.nlm.nih.gov/11450876/" },
+  { р:"Поясница", т:"«Единственно правильного» упражнения нет: работает то направление, которое уменьшает симптом, и регулярность. Это не заключение врача.",
+    и:"Long 2004, Spine", u:"https://pubmed.ncbi.nlm.nih.gov/15564907/" }
+];
+
+const МИФЫ = [
+  ["Менять упражнения каждую тренировку ("+"«путаница»"+")", "не подтверждается: прогресс даёт перегрузка в знакомых движениях"],
+  ["Пресс убирает живот, сведения — жир с груди", "локальная тренировка не сжигает жир в этом месте"],
+  ["Анаболическое окно 30 минут", "окно шире; решает суточный белок, до или после — одинаково"],
+  ["Без приседа и становой массы не будет", "машины дают сходную гипертрофию; важнее объём и усилие"],
+  ["Растяжка предотвращает травмы", "не подтверждается; риск снижает силовая работа"],
+  ["Тренировка до отказа обязательна", "RIR 1–2 дают тот же результат"],
+  ["Малые веса — рельеф, большие — масса", "при равном усилии 5–30 повторов дают сходный рост"]
+];
 const load = () => { try { const s = JSON.parse(localStorage.getItem(KEY)); return s && s.sessions ? s : {sessions:[], вес:[]} } catch(e){ return {sessions:[], вес:[]} } };
 const save = s => localStorage.setItem(KEY, JSON.stringify(s));
 let state = load();
+if(!state.план){ state.план = JSON.parse(JSON.stringify(PLAN)); save(state); }
 let tab = "today";
 let manualPlan = null;
 
 const fmtDate = d => new Date(d).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"});
 const todayKey = () => new Date().toISOString().slice(0,10);
-const planFor = wd => PLAN.дни.find(d => d.wd.includes(wd));
+const planFor = wd => P().дни.find(d => d.wd.includes(wd));
+const P = () => state.план || PLAN;
 const round = (x, step) => Math.round(x / step) * step;
 
-const PLAN_EX = new Map(PLAN.дни.flatMap(d => d.упражнения.map(e => [e.id, e])));
+const planEx = id => P().дни.flatMap(d => d.упражнения).find(e => e.id === id);
 
 function allEntries(exId){
-  const pe = PLAN_EX.get(exId) || {};
+  const pe = planEx(exId) || {};
   const need = pe.подходы || 0, top = pe.верх || 0;
   const out = [];
   state.sessions.forEach(s => {
@@ -282,10 +351,10 @@ function suggest(ex){
   let misses = 0;
   for(let i = h.length-1; i >= 0 && !h[i].hitTop; i--) misses++;
   if(last.hitTop){
-    return {вес:last.вес + PLAN.шаг, text:`Прошлый раз ${last.сделано.length}×${ex.верх} с ${last.вес} кг → сегодня ${last.вес + PLAN.шаг} кг`};
+    return {вес:last.вес + P().шаг, text:`Прошлый раз ${last.сделано.length}×${ex.верх} с ${last.вес} кг → сегодня ${last.вес + P().шаг} кг`};
   }
   if(misses >= 2){
-    const w = round(last.вес * 0.9, PLAN.шаг);
+    const w = round(last.вес * 0.9, P().шаг);
     return {вес:w, text:`Два раза не добрал повторы → сброс 10%: ${w} кг (было ${last.вес})`};
   }
   return {вес:last.вес, text:`Прошлый раз ${last.сделано.length} подх. по ${last.вес} кг → тот же вес, добери повторы`, muted:true};
@@ -308,15 +377,15 @@ function ensureSession(plan){
 }
 
 function warmups(w){
-  if(!w || +w <= PLAN.шаг*2) return [];
-  return [0.4, 0.6, 0.8].map(p => round(+w * p, PLAN.шаг)).filter(x => x > 0 && x < +w);
+  if(!w || +w <= P().шаг*2) return [];
+  return [0.4, 0.6, 0.8].map(p => round(+w * p, P().шаг)).filter(x => x > 0 && x < +w);
 }
 
 /* ---------- таймер отдыха ---------- */
 let tick = null;
 function getTimer(){ try { return JSON.parse(localStorage.getItem(TKEY)) } catch(e){ return null } }
 function setTimer(o){ o ? localStorage.setItem(TKEY, JSON.stringify(o)) : localStorage.removeItem(TKEY); drawTimer(); }
-function startRest(sec){ const total = sec || PLAN.отдых; setTimer({end: Date.now() + total*1000, total}); }
+function startRest(sec){ const total = sec || P().отдых; setTimer({end: Date.now() + total*1000, total}); }
 function drawTimer(){
   const el = document.getElementById("timer");
   const t = getTimer();
@@ -367,7 +436,7 @@ function renderToday(){
     const wu = warmups(e.подходы[0].вес);
     return `<section class="card ${allDone ? "done" : ""}">
       <div class="exhead"><div class="exname">${e.имя}</div>
-        <div class="plan">${ex.подходы} × ${ex.низ}–${ex.верх}<span class="tbtn" data-rest="1">⏱</span></div></div>
+        <div class="plan">${ex.подходы} × ${ex.низ}–${ex.верх}<span class="tbtn" data-rest="${ex.отдых || 90}">⏱</span></div></div>
       <div class="hint ${h.muted ? "muted" : ""}">${h.text}</div>
       ${(t => t ? `<details class="tech"><summary>техника и подсказки</summary>
         <ul>${t.подсказки.map(c => `<li>${c}</li>`).join("")}</ul>
@@ -402,10 +471,15 @@ function renderToday(){
     p.готово = !p.готово;
     if(p.готово && +p.вес > 0 && !p.повторы) p.повторы = ex_верх(plan, s.упражнения[+ex].id);
     save(state);
-    if(p.готово) startRest();
+    if(p.готово){
+      const exObj = plan.упражнения.find(x => x.id === s.упражнения[+ex].id);
+      startRest(exObj ? exObj.отдых : P().отдых);
+    }
     renderToday();
   }));
-  app.querySelectorAll(".tbtn").forEach(b => b.addEventListener("click", () => startRest()));
+  app.querySelectorAll(".tbtn").forEach(b => b.addEventListener("click", ev => {
+    startRest(+ev.currentTarget.dataset.rest || P().отдых);
+  }));
   document.getElementById("finish").onclick = () => {
     const done = s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0);
     if(!done){ alert("Пока ни одного подхода не отмечено."); return; }
@@ -450,6 +524,88 @@ function renderProgress(){
     }).join("");
   }
   app.innerHTML = html;
+}
+
+function renderScience(){
+  const app = document.getElementById("app");
+  document.getElementById("title").textContent = "Наука";
+  document.getElementById("subtitle").textContent = "обзоры и мета-анализы, ссылки на PubMed";
+  const cards = НАУКА.map(x => `<section class="card">
+    <div class="exhead"><div class="exname">${x.р}</div></div>
+    <div style="font-size:14px">${x.т}</div>
+    <a class="src" href="${x.u}" target="_blank" rel="noopener">${x.и}</a>
+  </section>`).join("");
+  const myths = МИФЫ.map(([m, r]) => `<div class="myth"><b>${m}</b><br><span>${r}</span></div>`).join("");
+  app.innerHTML = cards + `<section class="card">
+    <div class="exhead"><div class="exname">Мифы</div><div class="plan">не подтверждаются</div></div>
+    ${myths}
+  </section>
+  <section class="card"><div class="hint muted">Это общие данные из литературы, а не медицинское заключение.
+  Поясница и допустимые веса — только с лечащим врачом. Полный разбор с 38 источниками — в файле наука.md.</div></section>`;
+}
+
+function renderPlan(){
+  const app = document.getElementById("app");
+  document.getElementById("title").textContent = "План";
+  document.getElementById("subtitle").textContent = "нажми на упражнение, чтобы изменить";
+  const pl = P();
+  app.innerHTML = pl.дни.map((d, di) => `<section class="card">
+    <div class="exhead"><div class="exname">${d.группа}</div><div class="plan">${d.упражнения.reduce((n,e)=>n+e.подходы,0)} подх.</div></div>
+    ${d.упражнения.map((e, ei) => `<div class="erow" data-d="${di}" data-e="${ei}">
+      <span class="ename">${e.имя}</span>
+      <span class="eplan">${e.подходы}×${e.низ}–${e.верх}</span>
+      <span class="del" data-d="${di}" data-e="${ei}">✕</span>
+    </div>`).join("")}
+    <button class="btn ghost" data-add="${di}" style="margin-top:10px">+ упражнение</button>
+  </section>`).join("") + `<section class="card">
+    <div class="hint muted">Изменения сохраняются на телефоне. История по упражнению привязана к нему, поэтому при замене упражнения старые записи остаются в «Прогрессе».</div>
+    <button class="btn ghost" id="planReset">Вернуть стандартный план</button>
+  </section>`;
+
+  app.querySelectorAll(".erow").forEach(row => row.addEventListener("click", ev => {
+    if(ev.target.classList.contains("del")) return;
+    const di = +row.dataset.d, ei = +row.dataset.e;
+    const e = P().дни[di].упражнения[ei];
+    const name = prompt("Название упражнения", e.имя);
+    if(name === null) return;
+    const sets = prompt("Сколько подходов", e.подходы);
+    if(sets === null) return;
+    const reps = prompt("Повторы (например 8-12 или 15)", `${e.низ}-${e.верх}`);
+    if(reps === null) return;
+    const m = String(reps).match(/(\d+)\D+(\d+)/);
+    e.имя = name.trim() || e.имя;
+    e.подходы = Math.max(1, Math.min(10, +sets || e.подходы));
+    if(m){ e.низ = +m[1]; e.верх = +m[2]; } else if(+reps){ e.низ = e.верх = +reps; }
+    save(state); renderPlan();
+  }));
+  app.querySelectorAll(".del").forEach(x => x.addEventListener("click", ev => {
+    ev.stopPropagation();
+    const di = +x.dataset.d, ei = +x.dataset.e;
+    const e = P().дни[di].упражнения[ei];
+    if(!confirm(`Убрать «${e.имя}» из плана?`)) return;
+    P().дни[di].упражнения.splice(ei, 1);
+    save(state); renderPlan();
+  }));
+  app.querySelectorAll("[data-add]").forEach(b => b.addEventListener("click", () => {
+    const di = +b.dataset.add;
+    const name = prompt("Название нового упражнения", "");
+    if(!name) return;
+    const sets = prompt("Сколько подходов", "3");
+    const reps = prompt("Повторы (например 10-12)", "10-12");
+    const m = String(reps || "").match(/(\d+)\D+(\d+)/);
+    const lo = m ? +m[1] : 10, hi = m ? +m[2] : 12;
+    P().дни[di].упражнения.push({
+      id: "custom-" + Date.now().toString(36),
+      имя: name.trim(), подходы: Math.max(1, Math.min(10, +sets || 3)),
+      низ: lo, верх: hi, отдых: 90
+    });
+    save(state); renderPlan();
+  }));
+  document.getElementById("planReset").onclick = () => {
+    if(!confirm("Вернуть стандартный план? Твои изменения плана пропадут, история тренировок останется.")) return;
+    state.план = JSON.parse(JSON.stringify(PLAN));
+    save(state); renderPlan();
+  };
 }
 
 function renderSettings(){
@@ -509,6 +665,7 @@ function renderSettings(){
       <div class="exhead"><div class="exname">План</div></div>
       <div class="hint muted">Вторник — спина и плечи · Четверг — грудь и руки · Суббота или воскресенье — ноги и пресс.<br>
       Без осевой нагрузки: протрузия поясницы.</div>
+      <button class="btn ghost" id="editPlan" style="margin-top:10px">Изменить упражнения</button>
     </section>
     <section class="card">
       <div class="exhead"><div class="exname">О приложении</div><div class="plan">версия ${VERSION}</div></div>
@@ -540,14 +697,15 @@ function renderSettings(){
         const d = JSON.parse(r.result);
         if(!d || !Array.isArray(d.sessions)) throw 0;
         if(!confirm(`Загрузить ${d.sessions.length} записей? Текущие данные будут заменены.`)) return;
-        state = {sessions:d.sessions, вес:d.вес || []}; save(state); render();
+        state = {sessions:d.sessions, вес:d.вес || [], план: d.план || state.план}; save(state); render();
       } catch(e){ alert("Не похоже на файл из этого приложения."); }
     };
     r.readAsText(f);
   };
   document.getElementById("reset").onclick = () => {
-    if(confirm("Стереть всю историю?")){ state = {sessions:[], вес:[]}; save(state); render(); }
+    if(confirm("Стереть всю историю?")){ state = {sessions:[], вес:[], план:state.план}; save(state); render(); }
   };
+  document.getElementById("editPlan").onclick = () => { tab = "plan"; render(); };
   document.getElementById("upd").onclick = async () => {
     try {
       if("serviceWorker" in navigator){
@@ -564,9 +722,13 @@ function renderSettings(){
 }
 
 function render(){
+  const vEl = document.getElementById("ver");
+  if(vEl) vEl.textContent = "v" + VERSION;
   document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   if(tab === "today") renderToday();
   else if(tab === "progress") renderProgress();
+  else if(tab === "science") renderScience();
+  else if(tab === "plan") renderPlan();
   else renderSettings();
   drawTimer();
 }
