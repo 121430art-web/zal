@@ -77,6 +77,12 @@
   details.tech .bad{font-size:13px;color:var(--warn);margin-top:6px}
   details.tech a{display:inline-block;margin-top:8px;font-size:13px;color:var(--acc);text-decoration:none}
   .wr{display:flex;justify-content:space-between;gap:10px;font-size:14px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--line)}
+  .wrow{display:grid;grid-template-columns:1fr auto 70px;gap:10px;font-size:14px;padding:6px 0;
+    border-bottom:1px solid var(--line);color:var(--text)}
+  .wrow span:first-child{color:var(--muted)}
+  .wrow .down{color:var(--ok);text-align:right}
+  .wrow .up{color:var(--warn);text-align:right}
+  .wrow span:last-child{text-align:right}
   .timer{position:fixed;left:12px;right:12px;bottom:calc(74px + env(safe-area-inset-bottom));
     background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;
     display:none;align-items:center;gap:10px;z-index:21;box-shadow:0 8px 24px rgba(0,0,0,.35)}
@@ -451,25 +457,42 @@ function renderSettings(){
   document.getElementById("title").textContent = "Ещё";
   document.getElementById("subtitle").textContent = "данные только на этом телефоне";
 
-  const bw = (state.вес || []).slice(-10);
-  const pts = bw.map(x => x.кг);
+  const all = (state.вес || []).slice().sort((a,b) =>
+    (a.ts || 0) - (b.ts || 0) || (a.дата < b.дата ? -1 : a.дата > b.дата ? 1 : 0));
+  const byDay = new Map();
+  all.forEach(x => byDay.set(x.дата, x));
+  const days = [...byDay.values()].slice(-14);
+  const pts = days.map(x => x.кг);
   const maxW = Math.max(...pts, 1), minW = Math.min(...pts, maxW - 1);
-  const line = bw.length > 1 ? bw.map((x,i) => {
-    const X = 10 + i * (280 / (bw.length - 1));
+  const line = days.length > 1 ? days.map((x,i) => {
+    const X = 10 + i * (280 / (days.length - 1));
     const Y = 100 - ((x.кг - minW) / Math.max(1, maxW - minW)) * 80;
     return `${X.toFixed(1)},${Y.toFixed(1)}`;
   }).join(" ") : "";
+  const last = all[all.length-1];
+  const rows = all.slice(-8).reverse().map((x, i, arr) => {
+    const idx = all.indexOf(x);
+    const prev = idx > 0 ? all[idx-1] : null;
+    const d = prev ? (x.кг - prev.кг) : 0;
+    const ds = prev ? (d > 0 ? "+" : "") + d.toFixed(1).replace(".", ",") : "—";
+    const dt = new Date(x.ts || (x.дата + "T12:00:00"));
+    return `<div class="wrow"><span>${dt.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"})}
+      ${x.ts ? dt.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}) : ""}</span>
+      <span>${String(x.кг).replace(".", ",")} кг</span>
+      <span class="${d < 0 ? "down" : d > 0 ? "up" : ""}">${ds}</span></div>`;
+  }).join("");
 
   app.innerHTML = `
     <section class="card">
-      <div class="exhead"><div class="exname">Вес тела</div><div class="plan">${bw.length ? bw[bw.length-1].кг + " кг" : "нет данных"}</div></div>
+      <div class="exhead"><div class="exname">Вес тела</div><div class="plan">${last ? String(last.кг).replace(".", ",") + " кг" : "нет данных"}</div></div>
       <div class="bwbox">
         <input type="number" id="bw" step="0.1" min="30" max="250" placeholder="кг" inputmode="decimal">
         <button class="btn ghost" id="bwAdd" style="width:auto">Записать</button>
       </div>
-      ${bw.length > 1 ? `<svg class="chart" viewBox="0 0 300 110" preserveAspectRatio="none">
+      ${rows ? `<div class="hist">${rows}</div>` : `<div class="k" style="margin-top:8px">Пока нет замеров</div>`}
+      ${days.length > 1 ? `<svg class="chart" viewBox="0 0 300 110" preserveAspectRatio="none">
         <polyline fill="none" stroke="#5b9cff" stroke-width="2" points="${line}"/></svg>
-        <div class="k">${fmtDate(bw[0].дата)} → ${fmtDate(bw[bw.length-1].дата)}</div>` : `<div class="k" style="margin-top:8px">Добавь два замера — появится график</div>`}
+        <div class="k">${fmtDate(days[0].дата)} → ${fmtDate(days[days.length-1].дата)}</div>` : `<div class="k" style="margin-top:8px">Добавь два замера — появится график</div>`}
     </section>
     <section class="card">
       <div class="exhead"><div class="exname">Данные</div><div class="plan">${state.sessions.length} записей</div></div>
@@ -494,13 +517,15 @@ function renderSettings(){
     </section>`;
 
   document.getElementById("bwAdd").onclick = () => {
-    const v = +document.getElementById("bw").value;
+    const inp = document.getElementById("bw");
+    const v = +inp.value;
     if(!v || v < 30 || v > 250){ alert("Введи вес в кг"); return; }
     state.вес = state.вес || [];
-    const k = todayKey();
-    const ex = state.вес.find(x => x.дата === k);
-    if(ex) ex.кг = v; else state.вес.push({дата:k, кг:v});
-    save(state); renderSettings();
+    state.вес.push({ дата: todayKey(), кг: v, ts: Date.now() });
+    save(state);
+    renderSettings();
+    const fresh = document.getElementById("bw");
+    if(fresh) fresh.focus();
   };
   document.getElementById("export").onclick = async () => {
     const txt = JSON.stringify(state, null, 1);
