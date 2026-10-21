@@ -179,7 +179,7 @@ const PLAN = {
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
-const VERSION = "2.5";
+const VERSION = "2.6";
 
 /* Техника: короткие подсказки своими словами. Перед началом — 5–10 минут разминки. */
 const TIPS = {
@@ -575,6 +575,43 @@ function renderProgress(){
 
   let html = "";
 
+  /* --- сводка за 4 недели --- */
+  const done = sessions.map(s => ({
+    дата: s.дата,
+    тоннаж: s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово && +p.вес > 0)
+      .reduce((m,p) => m + (+p.вес) * (+p.повторы || 0), 0), 0),
+    подходы: s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0)
+  })).filter(x => x.подходы > 0);
+  const weeks = new Map();
+  done.forEach(x => {
+    const d = new Date(x.дата + "T12:00:00");
+    const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    const k = mon.toISOString().slice(0,10);
+    const w = weeks.get(k) || {тоннаж:0, тренировок:0, подходы:0};
+    w.тоннаж += x.тоннаж; w.тренировок++; w.подходы += x.подходы;
+    weeks.set(k, w);
+  });
+  const wkeys = [...weeks.keys()].sort().slice(-6);
+  const wmax = Math.max(1, ...wkeys.map(k => weeks.get(k).тоннаж));
+  const last4 = wkeys.slice(-4);
+  const тоннаж4 = last4.reduce((n,k) => n + weeks.get(k).тоннаж, 0);
+  const тр4 = last4.reduce((n,k) => n + weeks.get(k).тренировок, 0);
+  const пд4 = last4.reduce((n,k) => n + weeks.get(k).подходы, 0);
+
+  if(done.length){
+    html += `<section class="card">
+      <div class="exhead"><div class="exname">Итоги</div><div class="plan">за 4 недели</div></div>
+      <div class="hist">
+        <div class="hbar"><span>тренировок</span><span class="bar"><i style="width:${Math.min(100, тр4/12*100)}%"></i></span><span>${тр4}</span></div>
+        <div class="hbar"><span>тоннаж</span><span class="bar"><i style="width:100%"></i></span><span>${Math.round(тоннаж4/1000)} т</span></div>
+        <div class="hbar"><span>подходов</span><span class="bar"><i style="width:${Math.min(100, пд4/200*100)}%"></i></span><span>${пд4}</span></div>
+      </div>
+      ${wkeys.length > 1 ? `<div class="hist" style="margin-top:12px">${wkeys.map(k => `<div class="hbar">
+        <span>${fmtDate(k)}</span><span class="bar"><i style="width:${Math.round(weeks.get(k).тоннаж/wmax*100)}%"></i></span>
+        <span>${Math.round(weeks.get(k).тоннаж/1000)} т</span></div>`).join("")}</div>` : ""}
+    </section>`;
+  }
+
   /* объём за неделю по группам мышц — из текущего плана */
   const groups = {};
   P().дни.forEach(d => d.упражнения.forEach(e => {
@@ -761,7 +798,14 @@ function renderSettings(){
     <section class="card">
       <div class="exhead"><div class="exname">Данные</div><div class="plan">${state.sessions.length} записей</div></div>
       <div class="hint muted">Ничего не уходит в интернет. Синхронизации нет.</div>
-      <div class="row" style="margin-bottom:8px"><button class="btn ghost" id="export">Скопировать JSON</button></div>
+      <div class="row" style="margin-bottom:8px">
+        <button class="btn ghost" id="dlJson">Скачать JSON</button>
+        <button class="btn ghost" id="dlCsv">Скачать CSV</button>
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <button class="btn ghost" id="export">Скопировать JSON</button>
+        <button class="btn ghost" id="report">Отчёт текстом</button>
+      </div>
       <div class="row"><label class="btn ghost" style="text-align:center;display:block">Загрузить JSON<input type="file" id="import" accept=".json" hidden></label></div>
     </section>
     <section class="card">
@@ -791,6 +835,62 @@ function renderSettings(){
     renderSettings();
     const fresh = document.getElementById("bw");
     if(fresh) fresh.focus();
+  };
+  const download = (name, text, mime) => {
+    const blob = new Blob([text], { type: mime });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  };
+  document.getElementById("dlJson").onclick = () => {
+    download(`зал-${todayKey()}.json`, JSON.stringify(state, null, 1), "application/json");
+  };
+  document.getElementById("dlCsv").onclick = () => {
+    const lines = ["дата;группа;упражнение;подход;вес;повторы"];
+    state.sessions.forEach(s => s.упражнения.forEach(e => e.подходы.forEach((p, i) => {
+      if(!p.готово) return;
+      lines.push([s.дата, s.группа, e.имя, i + 1, p.вес, p.повторы].join(";"));
+    })));
+    download(`зал-${todayKey()}.csv`, "\ufeff" + lines.join("\r\n"), "text/csv");
+  };
+  document.getElementById("report").onclick = async () => {
+    const sessions = state.sessions.filter(s => s.упражнения.some(e => e.подходы.some(p => p.готово)));
+    const byEx = {};
+    let тоннаж = 0, подходы = 0;
+    sessions.forEach(s => s.упражнения.forEach(e => e.подходы.filter(p => p.готово).forEach(p => {
+      подходы++;
+      if(+p.вес > 0 && +p.повторы > 0){
+        тоннаж += (+p.вес) * (+p.повторы);
+        const b = byEx[e.имя] || {рекорд:0, одноПМ:0, дата:""};
+        if(+p.вес > b.рекорд){ b.рекорд = +p.вес; b.дата = s.дата; }
+        b.одноПМ = Math.max(b.одноПМ, (+p.вес) * (1 + (+p.повторы) / 30));
+        byEx[e.имя] = b;
+      }
+    })));
+    const groups = {};
+    P().дни.forEach(d => d.упражнения.forEach(e => {
+      const g = e.гр || "прочее";
+      groups[g] = (groups[g] || 0) + e.подходы;
+    }));
+    const last = sessions.length ? sessions.map(s => s.дата).sort().pop() : "—";
+    const txt = [
+      `# Зал: отчёт ${todayKey()}`,
+      ``,
+      `Тренировок: ${sessions.length}. Подходов отмечено: ${подходы}. Тоннаж: ${Math.round(тоннаж)} кг. Последняя: ${last}.`,
+      ``,
+      `## Объём по плану (подходов в неделю)`,
+      ...Object.entries(groups).map(([g, n]) => `- ${g}: ${n}${n < 8 ? " (ниже 8 — мало)" : ""}`),
+      ``,
+      `## По упражнениям`,
+      ...Object.entries(byEx).map(([n, b]) => `- ${n}: рекорд ${b.рекорд} кг (${fmtDate(b.дата)}), оценка 1ПМ ≈ ${Math.round(b.одноПМ*2)/2} кг`),
+      ``,
+      `## Вес тела`,
+      ...(state.вес || []).slice(-6).map(x => `- ${fmtDate(x.дата)}: ${x.кг} кг`)
+    ].join("\n");
+    try { await navigator.clipboard.writeText(txt); alert("Отчёт скопирован — вставь в Telegram"); }
+    catch(e){ prompt("Скопируй отчёт:", txt); }
   };
   document.getElementById("export").onclick = async () => {
     const txt = JSON.stringify(state, null, 1);
