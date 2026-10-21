@@ -130,6 +130,7 @@ const PLAN = {
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
+const VERSION = "2.0";
 const load = () => { try { const s = JSON.parse(localStorage.getItem(KEY)); return s && s.sessions ? s : {sessions:[], вес:[]} } catch(e){ return {sessions:[], вес:[]} } };
 const save = s => localStorage.setItem(KEY, JSON.stringify(s));
 let state = load();
@@ -380,6 +381,11 @@ function renderSettings(){
       <div class="exhead"><div class="exname">План</div></div>
       <div class="hint muted">Вторник — спина и плечи · Четверг — грудь и руки · Суббота или воскресенье — ноги и пресс.<br>
       Без осевой нагрузки: протрузия поясницы.</div>
+    </section>
+    <section class="card">
+      <div class="exhead"><div class="exname">О приложении</div><div class="plan">версия ${VERSION}</div></div>
+      <div class="hint muted">Если видишь старую версию — нажми кнопку: она сбросит кэш и перезагрузит приложение. Данные тренировок не пострадают.</div>
+      <button class="btn ghost" id="upd">Проверить обновление</button>
     </section>`;
 
   document.getElementById("bwAdd").onclick = () => {
@@ -411,6 +417,19 @@ function renderSettings(){
   };
   document.getElementById("reset").onclick = () => {
     if(confirm("Стереть всю историю?")){ state = {sessions:[], вес:[]}; save(state); render(); }
+  };
+  document.getElementById("upd").onclick = async () => {
+    try {
+      if("serviceWorker" in navigator){
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if(window.caches){
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch(e) {}
+    location.replace(location.pathname + "?v=" + Date.now());
   };
 }
 
