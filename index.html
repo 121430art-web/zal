@@ -94,6 +94,19 @@
   .vrow .vt{color:var(--muted)}
   .plate{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
   .plate span{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:13px}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;
+    padding:16px;z-index:60}
+  .modal.show{display:flex}
+  .modal .box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;width:100%;max-width:430px;
+    max-height:86vh;overflow:auto}
+  .modal h3{margin:0 0 6px;font-size:17px}
+  .modal label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
+  .modal input,.modal textarea{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:11px 10px;font:inherit}
+  .modal .acts{display:flex;gap:8px;margin-top:16px}
+  .toast{position:fixed;left:12px;right:12px;bottom:calc(120px + env(safe-area-inset-bottom));background:var(--card2);
+    border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:14px;display:none;z-index:70;
+    box-shadow:0 8px 24px rgba(0,0,0,.4)}
   .erow{display:grid;grid-template-columns:1fr auto 28px;gap:10px;align-items:center;
     padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
   .erow:last-of-type{border-bottom:0}
@@ -130,6 +143,8 @@
   <button id="timerPlus">+15</button>
   <button id="timerStop">стоп</button>
 </div>
+<div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
+<div class="toast" id="toast"></div>
 <div class="nav">
   <button data-tab="today" class="on"><span class="ico">🏋️</span>Сегодня</button>
   <button data-tab="progress"><span class="ico">📈</span>Прогресс</button>
@@ -179,7 +194,7 @@ const PLAN = {
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
-const VERSION = "2.6";
+const VERSION = "2.7";
 
 /* Техника: короткие подсказки своими словами. Перед началом — 5–10 минут разминки. */
 const TIPS = {
@@ -441,6 +456,48 @@ function warmups(w){
   return [0.4, 0.6, 0.8].map(p => round(+w * p, P().шаг)).filter(x => x > 0 && x < +w);
 }
 
+/* ---------- свои окна вместо prompt/alert (в установленном приложении они блокируются) ---------- */
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.style.display = "block";
+  clearTimeout(t._h); t._h = setTimeout(() => { t.style.display = "none"; }, 2600);
+}
+function closeModal(){ document.getElementById("modal").classList.remove("show"); }
+function form(title, fields, ok, hint){
+  const box = document.getElementById("modalBox");
+  box.innerHTML = `<h3>${title}</h3>${hint ? `<div class="hint muted" style="margin:6px 0 0">${hint}</div>` : ""}
+    ${fields.map((f, i) => `<label>${f.label}</label>
+      ${f.big ? `<textarea id="f${i}" rows="3">${f.value ?? ""}</textarea>`
+              : `<input id="f${i}" type="${f.type || "text"}" ${f.type === "number" ? 'inputmode="decimal" step="any"' : ""} value="${f.value ?? ""}">`}`).join("")}
+    <div class="acts">
+      <button class="btn ghost" id="mCancel">Отмена</button>
+      <button class="btn" id="mOk">Сохранить</button>
+    </div>`;
+  document.getElementById("modal").classList.add("show");
+  document.getElementById("mCancel").onclick = closeModal;
+  document.getElementById("mOk").onclick = () => {
+    const vals = fields.map((f, i) => document.getElementById("f" + i).value);
+    closeModal();
+    ok(vals);
+  };
+}
+function ask(title, text, ok){
+  const box = document.getElementById("modalBox");
+  box.innerHTML = `<h3>${title}</h3><div class="hint muted" style="margin:8px 0 0">${text}</div>
+    <div class="acts"><button class="btn ghost" id="mCancel">Отмена</button>
+    <button class="btn" id="mOk">Да</button></div>`;
+  document.getElementById("modal").classList.add("show");
+  document.getElementById("mCancel").onclick = closeModal;
+  document.getElementById("mOk").onclick = () => { closeModal(); ok(); };
+}
+function showText(title, text){
+  const box = document.getElementById("modalBox");
+  box.innerHTML = `<h3>${title}</h3><textarea rows="12" readonly>${text}</textarea>
+    <div class="acts"><button class="btn" id="mCancel">Закрыть</button></div>`;
+  document.getElementById("modal").classList.add("show");
+  document.getElementById("mCancel").onclick = closeModal;
+}
+
 /* ---------- таймер отдыха ---------- */
 let tick = null;
 function getTimer(){ try { return JSON.parse(localStorage.getItem(TKEY)) } catch(e){ return null } }
@@ -544,15 +601,15 @@ function renderToday(){
   }));
   app.querySelectorAll("[data-note]").forEach(b => b.addEventListener("click", () => {
     const id = b.dataset.note;
-    const v = prompt("Заметка к упражнению", state.заметки[id] || "");
-    if(v === null) return;
-    if(v.trim()) state.заметки[id] = v.trim(); else delete state.заметки[id];
-    save(state); renderToday();
+    form("Заметка к упражнению", [{ label: "Что помнить", value: state.заметки[id] || "", big: true }], ([v]) => {
+      if(v.trim()) state.заметки[id] = v.trim(); else delete state.заметки[id];
+      save(state); renderToday(); toast(v.trim() ? "Заметка сохранена" : "Заметка удалена");
+    }, "Например: «плечо хрустит — вес не выше 40»");
   }));
   document.getElementById("finish").onclick = () => {
     const done = s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0);
-    if(!done){ alert("Пока ни одного подхода не отмечено."); return; }
-    alert(`Готово: ${done} подходов. Данные сохранены на телефоне.`);
+    if(!done){ toast("Пока ни одного подхода не отмечено"); return; }
+    toast(`Готово: ${done} подходов. Данные на телефоне`);
     tab = "progress"; render();
   };
 }
@@ -698,49 +755,55 @@ function renderPlan(){
     if(ev.target.classList.contains("del")) return;
     const di = +row.dataset.d, ei = +row.dataset.e;
     const e = P().дни[di].упражнения[ei];
-    const name = prompt("Название упражнения", e.имя);
-    if(name === null) return;
-    const sets = prompt("Сколько подходов", e.подходы);
-    if(sets === null) return;
-    const reps = prompt("Повторы (например 8-12 или 15)", `${e.низ}-${e.верх}`);
-    if(reps === null) return;
-    const m = String(reps).match(/(\d+)\D+(\d+)/);
-    e.имя = name.trim() || e.имя;
-    e.подходы = Math.max(1, Math.min(10, +sets || e.подходы));
-    if(m){ e.низ = +m[1]; e.верх = +m[2]; } else if(+reps){ e.низ = e.верх = +reps; }
-    P().свой = true;
-    save(state); renderPlan();
+    form("Упражнение", [
+      { label: "Название", value: e.имя },
+      { label: "Подходы", value: e.подходы, type: "number" },
+      { label: "Повторы (например 8-12)", value: `${e.низ}-${e.верх}` },
+      { label: "Отдых, сек", value: e.отдых || 90, type: "number" }
+    ], ([name, sets, reps, rest]) => {
+      const m = String(reps).match(/(\d+)\D+(\d+)/);
+      e.имя = name.trim() || e.имя;
+      e.подходы = Math.max(1, Math.min(12, +sets || e.подходы));
+      if(m){ e.низ = +m[1]; e.верх = +m[2]; } else if(+reps){ e.низ = e.верх = +reps; }
+      e.отдых = Math.max(0, +rest || e.отдых || 90);
+      P().свой = true;
+      save(state); renderPlan(); toast("Изменено");
+    });
   }));
   app.querySelectorAll(".del").forEach(x => x.addEventListener("click", ev => {
     ev.stopPropagation();
     const di = +x.dataset.d, ei = +x.dataset.e;
     const e = P().дни[di].упражнения[ei];
-    if(!confirm(`Убрать «${e.имя}» из плана?`)) return;
-    P().дни[di].упражнения.splice(ei, 1);
-    P().свой = true;
-    save(state); renderPlan();
+    ask("Убрать упражнение?", `«${e.имя}» пропадёт из плана. История тренировок останется.`, () => {
+      P().дни[di].упражнения.splice(ei, 1);
+      P().свой = true;
+      save(state); renderPlan(); toast("Убрано из плана");
+    });
   }));
   app.querySelectorAll("[data-add]").forEach(b => b.addEventListener("click", () => {
     const di = +b.dataset.add;
-    const name = prompt("Название нового упражнения", "");
-    if(!name) return;
-    const sets = prompt("Сколько подходов", "3");
-    const reps = prompt("Повторы (например 10-12)", "10-12");
-    const m = String(reps || "").match(/(\d+)\D+(\d+)/);
-    const lo = m ? +m[1] : 10, hi = m ? +m[2] : 12;
-    P().дни[di].упражнения.push({
-      id: "custom-" + Date.now().toString(36),
-      имя: name.trim(), подходы: Math.max(1, Math.min(10, +sets || 3)),
-      низ: lo, верх: hi, отдых: 90
-    });
-    P().свой = true;
-    save(state); renderPlan();
+    form("Новое упражнение", [
+      { label: "Название", value: "" },
+      { label: "Подходы", value: 3, type: "number" },
+      { label: "Повторы (например 10-12)", value: "10-12" },
+      { label: "Отдых, сек", value: 90, type: "number" }
+    ], ([name, sets, reps, rest]) => {
+      if(!name.trim()){ toast("Нужно название"); return; }
+      const m = String(reps).match(/(\d+)\D+(\d+)/);
+      P().дни[di].упражнения.push({
+        id: "custom-" + Date.now().toString(36),
+        имя: name.trim(), подходы: Math.max(1, Math.min(12, +sets || 3)),
+        низ: m ? +m[1] : 10, верх: m ? +m[2] : 12, отдых: Math.max(0, +rest || 90)
+      });
+      P().свой = true;
+      save(state); renderPlan(); toast("Добавлено");
+    }, "Пиши как удобно: «тренажёр, где тянешь ручки к низу спины»");
   }));
   document.getElementById("planReset").onclick = () => {
-    if(!confirm("Вернуть стандартный план? Твои изменения плана пропадут, история тренировок останется.")) return;
-    state.план = JSON.parse(JSON.stringify(PLAN));
-    P().свой = true;
-    save(state); renderPlan();
+    ask("Вернуть стандартный план?", "Твои изменения плана пропадут. История тренировок останется.", () => {
+      state.план = JSON.parse(JSON.stringify(PLAN));
+      save(state); renderPlan(); toast("План сброшен к стандартному");
+    });
   };
 }
 
@@ -749,6 +812,9 @@ function renderSettings(){
   document.getElementById("title").textContent = "Ещё";
   document.getElementById("subtitle").textContent = "данные только на этом телефоне";
 
+  const bw = state.вес || [];
+  const dayKey = todayKey();
+  const d = (state.дни && state.дни[dayKey]) || {};
   const all = (state.вес || []).slice().sort((a,b) =>
     (a.ts || 0) - (b.ts || 0) || (a.дата < b.дата ? -1 : a.дата > b.дата ? 1 : 0));
   const byDay = new Map();
@@ -796,6 +862,19 @@ function renderSettings(){
       <div id="plOut" class="plate"></div>
     </section>
     <section class="card">
+      <div class="exhead"><div class="exname">День</div><div class="plan">${fmtDate(todayKey())}</div></div>
+      <div class="hint muted">Сон и белок — половина результата. Часы: длительность, пульс, калории. Заполнять не обязательно, но с этими цифрами я могу сказать точнее, что менять.</div>
+      <div class="bwbox" style="flex-wrap:wrap">
+        <input type="number" id="dSleep" step="0.5" min="0" max="16" placeholder="сон, ч" inputmode="decimal" value="${d.сон || ""}">
+        <input type="number" id="dProt" step="5" min="0" max="400" placeholder="белок, г" inputmode="numeric" value="${d.белок || ""}">
+        <input type="number" id="dMin" step="1" min="0" max="300" placeholder="мин" inputmode="numeric" value="${d.мин || ""}">
+        <input type="number" id="dHr" step="1" min="0" max="220" placeholder="пульс" inputmode="numeric" value="${d.пульс || ""}">
+        <input type="number" id="dKcal" step="10" min="0" max="3000" placeholder="ккал" inputmode="numeric" value="${d.ккал || ""}">
+        <button class="btn ghost" id="dSave" style="width:auto">Сохранить</button>
+      </div>
+      ${d.мин || d.пульс || d.ккал ? `<div class="k" style="margin-top:8px">последняя тренировка: ${d.мин ? d.мин + " мин" : ""}${d.пульс ? " · пульс " + d.пульс : ""}${d.ккал ? " · " + d.ккал + " ккал" : ""}</div>` : ""}
+    </section>
+    <section class="card">
       <div class="exhead"><div class="exname">Данные</div><div class="plan">${state.sessions.length} записей</div></div>
       <div class="hint muted">Ничего не уходит в интернет. Синхронизации нет.</div>
       <div class="row" style="margin-bottom:8px">
@@ -828,7 +907,7 @@ function renderSettings(){
   document.getElementById("bwAdd").onclick = () => {
     const inp = document.getElementById("bw");
     const v = +inp.value;
-    if(!v || v < 30 || v > 250){ alert("Введи вес в кг"); return; }
+    if(!v || v < 30 || v > 250){ toast("Введи вес в кг"); return; }
     state.вес = state.вес || [];
     state.вес.push({ дата: todayKey(), кг: v, ts: Date.now() });
     save(state);
@@ -887,15 +966,19 @@ function renderSettings(){
       ...Object.entries(byEx).map(([n, b]) => `- ${n}: рекорд ${b.рекорд} кг (${fmtDate(b.дата)}), оценка 1ПМ ≈ ${Math.round(b.одноПМ*2)/2} кг`),
       ``,
       `## Вес тела`,
-      ...(state.вес || []).slice(-6).map(x => `- ${fmtDate(x.дата)}: ${x.кг} кг`)
+      ...(state.вес || []).slice(-6).map(x => `- ${fmtDate(x.дата)}: ${x.кг} кг`),
+      ``,
+      `## Дни (сон / белок / часы)`,
+      ...Object.entries(state.дни || {}).slice(-7).map(([dt, v]) =>
+        `- ${fmtDate(dt)}: сон ${v.сон || "—"} ч, белок ${v.белок || "—"} г, ${v.мин || "—"} мин, пульс ${v.пульс || "—"}, ${v.ккал || "—"} ккал`)
     ].join("\n");
-    try { await navigator.clipboard.writeText(txt); alert("Отчёт скопирован — вставь в Telegram"); }
-    catch(e){ prompt("Скопируй отчёт:", txt); }
+    try { await navigator.clipboard.writeText(txt); toast("Отчёт скопирован — вставь в Telegram"); }
+    catch(e){ showText("Отчёт: скопируй вручную", txt); }
   };
   document.getElementById("export").onclick = async () => {
     const txt = JSON.stringify(state, null, 1);
-    try { await navigator.clipboard.writeText(txt); alert("JSON скопирован"); }
-    catch(e){ prompt("Скопируй вручную:", txt); }
+    try { await navigator.clipboard.writeText(txt); toast("JSON скопирован"); }
+    catch(e){ showText("JSON: скопируй вручную", txt); }
   };
   document.getElementById("import").onchange = ev => {
     const f = ev.target.files[0]; if(!f) return;
@@ -904,14 +987,25 @@ function renderSettings(){
       try {
         const d = JSON.parse(r.result);
         if(!d || !Array.isArray(d.sessions)) throw 0;
-        if(!confirm(`Загрузить ${d.sessions.length} записей? Текущие данные будут заменены.`)) return;
-        state = {sessions:d.sessions, вес:d.вес || [], план: d.план || state.план}; save(state); render();
-      } catch(e){ alert("Не похоже на файл из этого приложения."); }
+        ask("Загрузить данные?", `${d.sessions.length} записей. Текущие данные будут заменены.`, () => {
+          state = {sessions:d.sessions, вес:d.вес || [], план: d.план || state.план, заметки: d.заметки || {}, дни: d.дни || {}};
+          save(state); render(); toast("Данные загружены");
+        });
+      } catch(e){ toast("Не похоже на файл из этого приложения"); }
     };
     r.readAsText(f);
   };
   document.getElementById("reset").onclick = () => {
-    if(confirm("Стереть всю историю?")){ state = {sessions:[], вес:[], план:state.план}; save(state); render(); }
+    ask("Стереть всю историю?", "Тренировки, замеры веса и заметки удалятся. План останется.", () => {
+      state = {sessions:[], вес:[], план:state.план, заметки:{}, дни:{}};
+      save(state); render(); toast("История стёрта");
+    });
+  };
+  document.getElementById("dSave").onclick = () => {
+    const g = id => { const v = +document.getElementById(id).value; return v > 0 ? v : null; };
+    state.дни = state.дни || {};
+    state.дни[todayKey()] = { сон: g("dSleep"), белок: g("dProt"), мин: g("dMin"), пульс: g("dHr"), ккал: g("dKcal") };
+    save(state); renderSettings();
   };
   document.getElementById("plGo").onclick = () => {
     const total = +document.getElementById("plW").value;
