@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Зал">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Зал</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#171a21; --card2:#1e222b; --line:#2a2f3a;
+    --text:#e8eaef; --muted:#98a0b3; --acc:#5b9cff; --ok:#3ddc97; --warn:#ffb454;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  body{padding:env(safe-area-inset-top) 0 calc(70px + env(safe-area-inset-bottom))}
+  header{padding:18px 16px 10px}
+  h1{font-size:20px;margin:0 0 4px;font-weight:650;letter-spacing:-.2px}
+  .sub{color:var(--muted);font-size:14px}
+  main{padding:0 12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin:0 0 12px}
+  .exhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+  .exname{font-weight:600;font-size:16px}
+  .plan{color:var(--muted);font-size:13px;white-space:nowrap}
+  .hint{color:var(--warn);font-size:13px;margin:2px 0 10px}
+  .hint.muted{color:var(--muted)}
+  .sets{display:flex;flex-direction:column;gap:8px}
+  .set{display:grid;grid-template-columns:26px 1fr 1fr 44px;gap:8px;align-items:center}
+  .n{color:var(--muted);font-size:13px;text-align:center}
+  input[type=number]{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:10px 8px;font-size:16px;text-align:center;-moz-appearance:textfield}
+  input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{
+    -webkit-appearance:none;margin:0}
+  .chk{width:44px;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--card2);
+    color:var(--muted);font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .chk.on{background:rgba(61,220,151,.14);border-color:rgba(61,220,151,.5);color:var(--ok)}
+  .row{display:flex;gap:8px;align-items:center}
+  button{font:inherit}
+  .btn{background:var(--acc);color:#08101f;border:0;border-radius:12px;padding:12px 16px;
+    font-weight:650;width:100%;cursor:pointer}
+  .btn.ghost{background:var(--card2);color:var(--text);border:1px solid var(--line)}
+  .btn:active{transform:translateY(1px)}
+  .nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:rgba(15,17,21,.96);
+    border-top:1px solid var(--line);padding:8px 6px calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(8px)}
+  .nav button{flex:1;background:none;border:0;color:var(--muted);font-size:12px;padding:6px 0;cursor:pointer}
+  .nav button.on{color:var(--text)}
+  .nav .ico{display:block;font-size:18px;margin-bottom:2px}
+  .empty{color:var(--muted);text-align:center;padding:30px 10px}
+  .hist{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+  .hbar{display:grid;grid-template-columns:74px 1fr 62px;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+  .bar{height:8px;border-radius:6px;background:var(--card2);overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--acc)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--card2);
+    border:1px solid var(--line);font-size:12px;color:var(--muted)}
+  .done{background:rgba(61,220,151,.1);border-color:rgba(61,220,151,.35)}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Сегодня</h1>
+  <div class="sub" id="subtitle"></div>
+</header>
+<main id="app"></main>
+<div class="nav">
+  <button data-tab="today" class="on"><span class="ico">🏋️</span>Сегодня</button>
+  <button data-tab="progress"><span class="ico">📈</span>Прогресс</button>
+  <button data-tab="settings"><span class="ico">⚙️</span>Ещё</button>
+</div>
+<script>
+/* План. Источник — plan.json в этой же папке; здесь копия, чтобы приложение
+   работало офлайн без запросов к серверу. */
+const PLAN = {
+  правила: { шаг: 2.5 },
+  дни: [
+    { wd:[2], группа:"спина и плечи", упражнения:[
+      {id:"pulldown", имя:"Тяга верхнего блока к груди", подходы:4, низ:8, верх:12},
+      {id:"row-supported", имя:"Тяга в тренажёре с упором в грудь", подходы:4, низ:8, верх:12},
+      {id:"pullover", имя:"Пуловер на верхнем блоке", подходы:3, низ:10, верх:12},
+      {id:"shoulder-press", имя:"Жим гантелей сидя (со спинкой)", подходы:4, низ:8, верх:12},
+      {id:"lateral-raise", имя:"Махи гантелями в стороны", подходы:3, низ:12, верх:15},
+      {id:"rear-delt", имя:"Разведения в наклоне (задняя дельта)", подходы:3, низ:12, верх:15}
+    ]},
+    { wd:[4], группа:"грудь и руки", упражнения:[
+      {id:"bench-press", имя:"Жим штанги лёжа", подходы:4, низ:8, верх:12},
+      {id:"incline-db", имя:"Жим гантелей на наклонной", подходы:3, низ:10, верх:12},
+      {id:"crossover", имя:"Сведения в кроссовере", подходы:3, низ:12, верх:15},
+      {id:"biceps-bar", имя:"Подъём штанги на бицепс", подходы:3, низ:10, верх:12},
+      {id:"triceps-pushdown", имя:"Разгибание на трицепс на блоке", подходы:3, низ:10, верх:12},
+      {id:"hammer-curl", имя:"Молотки сидя", подходы:3, низ:10, верх:12}
+    ]},
+    { wd:[6,0], группа:"ноги и пресс", упражнения:[
+      {id:"leg-press", имя:"Жим ногами", подходы:4, низ:10, верх:12},
+      {id:"leg-extension", имя:"Разгибание ног сидя", подходы:3, низ:12, верх:15},
+      {id:"leg-curl", имя:"Сгибание ног лёжа", подходы:3, низ:10, верх:15},
+      {id:"glute-bridge", имя:"Ягодичный мост с блином", подходы:3, низ:12, верх:15},
+      {id:"calf-raise", имя:"Подъём на носки", подходы:4, низ:15, верх:20},
+      {id:"dead-bug", имя:"Мёртвый жук", подходы:3, низ:8, верх:8}
+    ]}
+  ]
+};
+const KEY = "zal.v1";
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {sessions:[]} } catch(e){ return {sessions:[]} } };
+const save = s => localStorage.setItem(KEY, JSON.stringify(s));
+let state = load();
+let tab = "today";
+
+const fmtDate = d => new Date(d).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"});
+const todayKey = () => new Date().toISOString().slice(0,10);
+const dayOfWeek = () => new Date().getDay();
+const planFor = wd => PLAN.дни.find(d => d.wd.includes(wd));
+const nextPlan = wd => { for(let i=1;i<=7;i++){ const p = planFor((wd+i)%7); if(p) return {p, через:i}; } };
+
+function lastFor(exId){
+  for(let i=state.sessions.length-1;i>=0;i--){
+    const s = state.sessions[i];
+    const e = s.упражнения.find(x => x.id === exId);
+    if(e && e.подходы.some(p => p.готово)) return {дата:s.дата, e};
+  }
+  return null;
+}
+
+function hintFor(ex){
+  const last = lastFor(ex.id);
+  if(!last) return {text:"Первый раз — выбери рабочий вес сам", muted:true, вес:null};
+  const done = last.e.подходы.filter(p => p.готово);
+  const w = Math.max(...done.map(p => +p.вес || 0));
+  const allTop = done.length >= ex.подходы && done.every(p => (+p.повторы||0) >= ex.верх);
+  if(allTop) return {text:`Прошлый раз ${done.length}×${ex.верх} с ${w} кг → сегодня ${w + PLAN.правила.шаг} кг`, вес:w + PLAN.правила.шаг};
+  return {text:`Прошлый раз ${done.length} подх. по ${w} кг → тот же вес, добери повторы`, muted:true, вес:w};
+}
+
+function currentSession(){
+  const k = todayKey();
+  let s = state.sessions.find(x => x.дата === k);
+  return s;
+}
+
+function ensureSession(plan){
+  const k = todayKey();
+  let s = state.sessions.find(x => x.дата === k);
+  if(!s){
+    s = { дата:k, группа:plan.группа, упражнения: [] };
+    state.sessions.push(s);
+  }
+  plan.упражнения.forEach(ex => {
+    if(!s.упражнения.find(x => x.id === ex.id)){
+      const hint = hintFor(ex);
+      s.упражнения.push({ id:ex.id, имя:ex.имя, подходы: Array.from({length:ex.подходы},()=>({
+        вес: hint.вес ?? "", повторы:"", готово:false
+      }))});
+    }
+  });
+  save(state);
+  return s;
+}
+
+function renderToday(){
+  const wd = dayOfWeek();
+  const plan = planFor(wd);
+  const title = document.getElementById("title");
+  const sub = document.getElementById("subtitle");
+  const app = document.getElementById("app");
+
+  if(!plan){
+    const n = nextPlan(wd);
+    title.textContent = "Отдых";
+    sub.textContent = new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"});
+    app.innerHTML = `<div class="card"><div class="empty">Сегодня по плану отдыха.<br>
+      Следующая тренировка — <b>${n.p.группа}</b> через ${n.через} дн.</div></div>`;
+    return;
+  }
+  const s = ensureSession(plan);
+  title.textContent = plan.группа[0].toUpperCase() + plan.группа.slice(1);
+  sub.innerHTML = `${new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"})}
+    · <span class="pill">${s.упражнения.filter(e=>e.подходы.every(p=>p.готово)).length}/${s.упражнения.length} готово</span>`;
+
+  app.innerHTML = s.упражнения.map((e, ei) => {
+    const ex = plan.упражнения.find(x => x.id === e.id);
+    const h = hintFor(ex);
+    const allDone = e.подходы.every(p => p.готово);
+    return `<section class="card ${allDone ? "done" : ""}">
+      <div class="exhead"><div class="exname">${e.имя}</div>
+        <div class="plan">${ex.подходы} × ${ex.низ}–${ex.верх}</div></div>
+      <div class="hint ${h.muted ? "muted" : ""}">${h.text}</div>
+      <div class="sets">
+        ${e.подходы.map((p, pi) => `<div class="set">
+          <div class="n">${pi+1}</div>
+          <input type="number" inputmode="decimal" step="1.25" min="0" placeholder="кг"
+                 value="${p.вес}" data-ex="${ei}" data-set="${pi}" data-f="вес">
+          <input type="number" inputmode="numeric" step="1" min="0" placeholder="повт."
+                 value="${p.повторы}" data-ex="${ei}" data-set="${pi}" data-f="повторы">
+          <div class="chk ${p.готово ? "on" : ""}" data-ex="${ei}" data-set="${pi}">✓</div>
+        </div>`).join("")}
+      </div>
+    </section>`;
+  }).join("") + `<div class="card"><button class="btn" id="finish">Закончить тренировку</button></div>`;
+
+  app.querySelectorAll("input[type=number]").forEach(inp => {
+    inp.addEventListener("input", ev => {
+      const {ex, set, f} = ev.target.dataset;
+      s.упражнения[+ex].подходы[+set][f] = ev.target.value;
+      save(state);
+    });
+  });
+  app.querySelectorAll(".chk").forEach(chk => {
+    chk.addEventListener("click", ev => {
+      const {ex, set} = ev.currentTarget.dataset;
+      const p = s.упражнения[+ex].подходы[+set];
+      p.готово = !p.готово;
+      save(state);
+      renderToday();
+    });
+  });
+  const fin = document.getElementById("finish");
+  if(fin) fin.addEventListener("click", () => {
+    const done = s.упражнения.reduce((n,e) => n + e.подходы.filter(p=>p.готово).length, 0);
+    if(!done){ alert("Пока ни одного подхода не отмечено."); return; }
+    alert(`Готово: ${done} подходов. Данные сохранены на телефоне.`);
+    tab = "progress"; render();
+  });
+}
+
+function renderProgress(){
+  const app = document.getElementById("app");
+  document.getElementById("title").textContent = "Прогресс";
+  const sessions = state.sessions.filter(s => s.упражнения.some(e => e.подходы.some(p => p.готово)));
+  document.getElementById("subtitle").innerHTML = `тренировок: ${sessions.length}`;
+  if(!sessions.length){ app.innerHTML = `<div class="card"><div class="empty">Пока пусто. Отметь первый подход — и здесь появится история.</div></div>`; return; }
+
+  const byEx = new Map();
+  sessions.forEach(s => s.упражнения.forEach(e => {
+    const done = e.подходы.filter(p => p.готово && +p.вес > 0);
+    if(!done.length) return;
+    const vol = done.reduce((n,p) => n + (+p.вес) * (+p.повторы || 0), 0);
+    const best = Math.max(...done.map(p => +p.вес));
+    if(!byEx.has(e.id)) byEx.set(e.id, {имя:e.имя, точки:[]});
+    byEx.get(e.id).точки.push({дата:s.дата, best, vol});
+  }));
+
+  app.innerHTML = [...byEx.entries()].map(([id, v]) => {
+    const pts = v.точки.slice(-6);
+    const max = Math.max(...pts.map(p => p.vol)) || 1;
+    const last = pts[pts.length-1];
+    return `<section class="card">
+      <div class="exhead"><div class="exname">${v.имя}</div>
+        <div class="plan">макс ${Math.max(...v.точки.map(p=>p.best))} кг</div></div>
+      <div class="hint muted">последний раз ${fmtDate(last.дата)} · объём ${last.vol} кг</div>
+      <div class="hist">${pts.map(p => `<div class="hbar">
+        <span>${fmtDate(p.дата)}</span>
+        <span class="bar"><i style="width:${Math.round(p.vol/max*100)}%"></i></span>
+        <span>${p.vol}</span></div>`).join("")}</div>
+    </section>`;
+  }).join("");
+}
+
+function renderSettings(){
+  const app = document.getElementById("app");
+  document.getElementById("title").textContent = "Ещё";
+  document.getElementById("subtitle").textContent = "данные хранятся только на этом телефоне";
+  const total = state.sessions.length;
+  app.innerHTML = `
+    <section class="card">
+      <div class="exhead"><div class="exname">Данные</div><div class="plan">${total} записей</div></div>
+      <div class="hint muted">Ничего не уходит в интернет. Синхронизации нет.</div>
+      <div class="row"><button class="btn ghost" id="export">Скопировать JSON</button></div>
+    </section>
+    <section class="card">
+      <div class="exhead"><div class="exname">Сброс</div></div>
+      <div class="hint">Удалит всю историю на этом телефоне.</div>
+      <button class="btn ghost" id="reset">Стереть всё</button>
+    </section>
+    <section class="card">
+      <div class="exhead"><div class="exname">План</div></div>
+      <div class="hint muted">Вторник — спина и плечи · Четверг — грудь и руки · Суббота или воскресенье — ноги и пресс.<br>
+      Без осевой нагрузки: протрузия поясницы.</div>
+    </section>`;
+  document.getElementById("export").onclick = async () => {
+    const txt = JSON.stringify(state, null, 1);
+    try { await navigator.clipboard.writeText(txt); alert("JSON скопирован"); }
+    catch(e){ prompt("Скопируй вручную:", txt); }
+  };
+  document.getElementById("reset").onclick = () => {
+    if(confirm("Стереть всю историю?")){ state = {sessions:[]}; save(state); render(); }
+  };
+}
+
+function render(){
+  document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  if(tab === "today") renderToday();
+  else if(tab === "progress") renderProgress();
+  else renderSettings();
+}
+document.querySelectorAll(".nav button").forEach(b => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
+render();
+
+/* офлайн-режим: файлы кэшируются один раз, дальше приложение работает без сети */
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>
