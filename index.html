@@ -425,7 +425,20 @@ document.querySelectorAll(".nav button").forEach(b => b.addEventListener("click"
 render();
 
 if("serviceWorker" in navigator && location.protocol === "https:"){
-  navigator.serviceWorker.register("sw.js").catch(() => {});
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    /* Новая версия нашлась — подхватываем сразу, без «удали и поставь заново». */
+    reg.addEventListener("updatefound", () => {
+      const sw = reg.installing;
+      if(!sw) return;
+      sw.addEventListener("statechange", () => {
+        if(sw.state === "installed" && navigator.serviceWorker.controller){
+          sw.postMessage({ type: "skip" });
+          location.reload();
+        }
+      });
+    });
+    setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+  }).catch(() => {});
 }
 </script>
 </body>

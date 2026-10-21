@@ -1,5 +1,5 @@
 /* Кэш приложения. Версию меняем при обновлении файлов. */
-const CACHE = "zal-v1";
+const CACHE = "zal-v2";
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -15,11 +15,28 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+
+  /* Страницы — сначала сеть. Иначе старая версия живёт в кэше неделями. */
+  if (e.request.mode === "navigate") {
+    e.respondWith(
+      fetch(e.request).then(resp => {
+        const copy = resp.clone();
+        caches.open(CACHE).then(c => c.put("./index.html", copy)).catch(() => {});
+        return resp;
+      }).catch(() => caches.match("./index.html"))
+    );
+    return;
+  }
+
+  /* Остальное — из кэша, но в фоне обновляем. */
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(resp => {
-      const copy = resp.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
-      return resp;
-    }).catch(() => caches.match("./index.html")))
+    caches.match(e.request).then(hit => {
+      const net = fetch(e.request).then(resp => {
+        const copy = resp.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        return resp;
+      }).catch(() => hit);
+      return hit || net;
+    })
   );
 });
