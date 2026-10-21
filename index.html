@@ -20,6 +20,9 @@
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
     font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
   body{padding:env(safe-area-inset-top) 0 calc(74px + env(safe-area-inset-bottom))}
+  .ver{position:absolute;right:16px;top:18px;font-size:11px;color:var(--muted);
+    border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+  header{position:relative}
   header{padding:18px 16px 10px}
   h1{font-size:20px;margin:0 0 4px;font-weight:650;letter-spacing:-.2px}
   .sub{color:var(--muted);font-size:14px}
@@ -82,6 +85,7 @@
 </head>
 <body>
 <header>
+  <div class="ver" id="ver">v2.0</div>
   <h1 id="title">Сегодня</h1>
   <div class="sub" id="subtitle"></div>
 </header>
