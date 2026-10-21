@@ -65,6 +65,9 @@
     border:1px solid var(--line);font-size:12px;color:var(--muted)}
   .pill.rec{color:#241c00;background:var(--rec);border-color:var(--rec);font-weight:700}
   .done{background:rgba(61,220,151,.1);border-color:rgba(61,220,151,.35)}
+  .tbtn{display:inline-block;margin-left:6px;border:1px solid var(--line);border-radius:999px;
+    padding:1px 7px;cursor:pointer;color:var(--muted)}
+  .wr{display:flex;justify-content:space-between;gap:10px;font-size:14px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--line)}
   .timer{position:fixed;left:12px;right:12px;bottom:calc(74px + env(safe-area-inset-bottom));
     background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;
     display:none;align-items:center;gap:10px;z-index:21;box-shadow:0 8px 24px rgba(0,0,0,.35)}
@@ -85,7 +88,7 @@
 </head>
 <body>
 <header>
-  <div class="ver" id="ver">v2.0</div>
+  <div class="ver" id="ver">v2.1</div>
   <h1 id="title">Сегодня</h1>
   <div class="sub" id="subtitle"></div>
 </header>
@@ -134,11 +137,12 @@ const PLAN = {
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
-const VERSION = "2.0";
+const VERSION = "2.1";
 const load = () => { try { const s = JSON.parse(localStorage.getItem(KEY)); return s && s.sessions ? s : {sessions:[], вес:[]} } catch(e){ return {sessions:[], вес:[]} } };
 const save = s => localStorage.setItem(KEY, JSON.stringify(s));
 let state = load();
 let tab = "today";
+let manualPlan = null;
 
 const fmtDate = d => new Date(d).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"});
 const todayKey = () => new Date().toISOString().slice(0,10);
@@ -241,15 +245,19 @@ document.getElementById("timerStop").onclick = () => setTimer(null);
 /* ---------- экраны ---------- */
 function renderToday(){
   const wd = new Date().getDay();
-  const plan = planFor(wd);
+  const plan = manualPlan || planFor(wd);
   const title = document.getElementById("title"), sub = document.getElementById("subtitle"), app = document.getElementById("app");
   if(!plan){
     let n = null;
     for(let i=1;i<=7;i++){ const p = planFor((wd+i)%7); if(p){ n = {p, через:i}; break; } }
     title.textContent = "Отдых";
     sub.textContent = new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"});
-    app.innerHTML = `<div class="card"><div class="empty">Сегодня по плану отдыха.<br>
-      Следующая тренировка — <b>${n.p.группа}</b> через ${n.через} дн.</div></div>`;
+    app.innerHTML = `<section class="card">
+      <div class="empty">Сегодня по плану отдыха.<br>Следующая — <b>${n.p.группа}</b> через ${n.через} дн.</div>
+      ${n.p.упражнения.map(e => `<div class="wr"><span>${e.имя}</span><span>${e.подходы}×${e.низ}–${e.верх}</span></div>`).join("")}
+      <button class="btn" id="startNow" style="margin-top:14px">Тренироваться сейчас (${n.p.группа})</button>
+      </section>`;
+    document.getElementById("startNow").onclick = () => { manualPlan = n.p; render(); };
     return;
   }
   const s = ensureSession(plan);
@@ -266,7 +274,7 @@ function renderToday(){
     const wu = warmups(e.подходы[0].вес);
     return `<section class="card ${allDone ? "done" : ""}">
       <div class="exhead"><div class="exname">${e.имя}</div>
-        <div class="plan">${ex.подходы} × ${ex.низ}–${ex.верх}</div></div>
+        <div class="plan">${ex.подходы} × ${ex.низ}–${ex.верх}<span class="tbtn" data-rest="1">⏱</span></div></div>
       <div class="hint ${h.muted ? "muted" : ""}">${h.text}</div>
       ${wu.length ? `<div class="warmup"><div class="wt">разминка</div>
         ${wu.map(w => `<div class="wr"><span>${Math.round(w/(+e.подходы[0].вес||1)*100)}%</span><span>${w} кг × 8–10</span></div>`).join("")}
@@ -299,6 +307,7 @@ function renderToday(){
     if(p.готово) startRest();
     renderToday();
   }));
+  app.querySelectorAll(".tbtn").forEach(b => b.addEventListener("click", () => startRest()));
   document.getElementById("finish").onclick = () => {
     const done = s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0);
     if(!done){ alert("Пока ни одного подхода не отмечено."); return; }
