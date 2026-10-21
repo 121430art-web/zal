@@ -14,12 +14,12 @@
 <style>
   :root{
     --bg:#0f1115; --card:#171a21; --card2:#1e222b; --line:#2a2f3a;
-    --text:#e8eaef; --muted:#98a0b3; --acc:#5b9cff; --ok:#3ddc97; --warn:#ffb454;
+    --text:#e8eaef; --muted:#98a0b3; --acc:#5b9cff; --ok:#3ddc97; --warn:#ffb454; --rec:#ffd166;
   }
-  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
     font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-  body{padding:env(safe-area-inset-top) 0 calc(70px + env(safe-area-inset-bottom))}
+  body{padding:env(safe-area-inset-top) 0 calc(74px + env(safe-area-inset-bottom))}
   header{padding:18px 16px 10px}
   h1{font-size:20px;margin:0 0 4px;font-weight:650;letter-spacing:-.2px}
   .sub{color:var(--muted);font-size:14px}
@@ -32,7 +32,9 @@
   .hint.muted{color:var(--muted)}
   .sets{display:flex;flex-direction:column;gap:8px}
   .set{display:grid;grid-template-columns:26px 1fr 1fr 44px;gap:8px;align-items:center}
+  .set.wu{grid-template-columns:52px 1fr 1fr 44px;opacity:.75}
   .n{color:var(--muted);font-size:13px;text-align:center}
+  .n.wu{font-size:11px;text-transform:uppercase;letter-spacing:.4px}
   input[type=number]{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);
     border-radius:10px;padding:10px 8px;font-size:16px;text-align:center;-moz-appearance:textfield}
   input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{
@@ -47,7 +49,7 @@
   .btn.ghost{background:var(--card2);color:var(--text);border:1px solid var(--line)}
   .btn:active{transform:translateY(1px)}
   .nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:rgba(15,17,21,.96);
-    border-top:1px solid var(--line);padding:8px 6px calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(8px)}
+    border-top:1px solid var(--line);padding:8px 6px calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(8px);z-index:20}
   .nav button{flex:1;background:none;border:0;color:var(--muted);font-size:12px;padding:6px 0;cursor:pointer}
   .nav button.on{color:var(--text)}
   .nav .ico{display:block;font-size:18px;margin-bottom:2px}
@@ -58,7 +60,24 @@
   .bar > i{display:block;height:100%;background:var(--acc)}
   .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--card2);
     border:1px solid var(--line);font-size:12px;color:var(--muted)}
+  .pill.rec{color:#241c00;background:var(--rec);border-color:var(--rec);font-weight:700}
   .done{background:rgba(61,220,151,.1);border-color:rgba(61,220,151,.35)}
+  .timer{position:fixed;left:12px;right:12px;bottom:calc(74px + env(safe-area-inset-bottom));
+    background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;
+    display:none;align-items:center;gap:10px;z-index:21;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+  .timer.show{display:flex}
+  .timer .t{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;min-width:74px}
+  .timer .lbl{font-size:12px;color:var(--muted);flex:1}
+  .timer button{background:var(--card);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:8px 10px;font-size:13px;cursor:pointer}
+  .timer.finished{border-color:var(--ok);background:rgba(61,220,151,.12)}
+  .warmup{background:var(--card2);border-radius:12px;padding:10px;margin:0 0 10px}
+  .warmup .wt{font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+  .warmup .wr{display:flex;justify-content:space-between;font-size:14px;color:var(--muted);padding:3px 0}
+  .bwbox{display:flex;gap:8px;align-items:center}
+  .bwbox input{max-width:110px}
+  svg.chart{width:100%;height:120px;display:block;margin-top:8px}
+  .k{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -67,16 +86,21 @@
   <div class="sub" id="subtitle"></div>
 </header>
 <main id="app"></main>
+<div class="timer" id="timer">
+  <div class="t" id="timerT">1:30</div>
+  <div class="lbl" id="timerL">отдых</div>
+  <button id="timerPlus">+15</button>
+  <button id="timerStop">стоп</button>
+</div>
 <div class="nav">
   <button data-tab="today" class="on"><span class="ico">🏋️</span>Сегодня</button>
   <button data-tab="progress"><span class="ico">📈</span>Прогресс</button>
   <button data-tab="settings"><span class="ico">⚙️</span>Ещё</button>
 </div>
 <script>
-/* План. Источник — plan.json в этой же папке; здесь копия, чтобы приложение
-   работало офлайн без запросов к серверу. */
 const PLAN = {
-  правила: { шаг: 2.5 },
+  шаг: 2.5,
+  отдых: 90,
   дни: [
     { wd:[2], группа:"спина и плечи", упражнения:[
       {id:"pulldown", имя:"Тяга верхнего блока к груди", подходы:4, низ:8, верх:12},
@@ -104,55 +128,76 @@ const PLAN = {
     ]}
   ]
 };
-const KEY = "zal.v1";
-const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {sessions:[]} } catch(e){ return {sessions:[]} } };
+const KEY = "zal.v2";
+const TKEY = "zal.timer";
+const load = () => { try { const s = JSON.parse(localStorage.getItem(KEY)); return s && s.sessions ? s : {sessions:[], вес:[]} } catch(e){ return {sessions:[], вес:[]} } };
 const save = s => localStorage.setItem(KEY, JSON.stringify(s));
 let state = load();
 let tab = "today";
 
 const fmtDate = d => new Date(d).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"});
 const todayKey = () => new Date().toISOString().slice(0,10);
-const dayOfWeek = () => new Date().getDay();
 const planFor = wd => PLAN.дни.find(d => d.wd.includes(wd));
-const nextPlan = wd => { for(let i=1;i<=7;i++){ const p = planFor((wd+i)%7); if(p) return {p, через:i}; } };
+const round = (x, step) => Math.round(x / step) * step;
 
-function lastFor(exId){
-  for(let i=state.sessions.length-1;i>=0;i--){
-    const s = state.sessions[i];
+const PLAN_EX = new Map(PLAN.дни.flatMap(d => d.упражнения.map(e => [e.id, e])));
+
+function allEntries(exId){
+  const pe = PLAN_EX.get(exId) || {};
+  const need = pe.подходы || 0, top = pe.верх || 0;
+  const out = [];
+  state.sessions.forEach(s => {
     const e = s.упражнения.find(x => x.id === exId);
-    if(e && e.подходы.some(p => p.готово)) return {дата:s.дата, e};
+    if(!e) return;
+    const done = e.подходы.filter(p => p.готово && +p.вес > 0);
+    if(!done.length) return;
+    out.push({
+      дата: s.дата,
+      вес: Math.max(...done.map(p => +p.вес)),
+      объём: done.reduce((n,p) => n + (+p.вес) * (+p.повторы || 0), 0),
+      сделано: done,
+      hitTop: done.length >= need && done.every(p => (+p.повторы || 0) >= top)
+    });
+  });
+  return out.sort((a,b) => a.дата < b.дата ? -1 : 1);
+}
+const bestBefore = exId => {
+  const today = todayKey();
+  let best = 0;
+  state.sessions.forEach(s => {
+    if(s.дата >= today) return;
+    const e = s.упражнения.find(x => x.id === exId);
+    if(!e) return;
+    e.подходы.forEach(p => { if(p.готово && +p.вес > best) best = +p.вес; });
+  });
+  return best;
+};
+
+function suggest(ex){
+  const h = allEntries(ex.id);
+  if(!h.length) return {вес:null, text:"Первый раз — выбери рабочий вес сам", muted:true};
+  const last = h[h.length-1];
+  let misses = 0;
+  for(let i = h.length-1; i >= 0 && !h[i].hitTop; i--) misses++;
+  if(last.hitTop){
+    return {вес:last.вес + PLAN.шаг, text:`Прошлый раз ${last.сделано.length}×${ex.верх} с ${last.вес} кг → сегодня ${last.вес + PLAN.шаг} кг`};
   }
-  return null;
-}
-
-function hintFor(ex){
-  const last = lastFor(ex.id);
-  if(!last) return {text:"Первый раз — выбери рабочий вес сам", muted:true, вес:null};
-  const done = last.e.подходы.filter(p => p.готово);
-  const w = Math.max(...done.map(p => +p.вес || 0));
-  const allTop = done.length >= ex.подходы && done.every(p => (+p.повторы||0) >= ex.верх);
-  if(allTop) return {text:`Прошлый раз ${done.length}×${ex.верх} с ${w} кг → сегодня ${w + PLAN.правила.шаг} кг`, вес:w + PLAN.правила.шаг};
-  return {text:`Прошлый раз ${done.length} подх. по ${w} кг → тот же вес, добери повторы`, muted:true, вес:w};
-}
-
-function currentSession(){
-  const k = todayKey();
-  let s = state.sessions.find(x => x.дата === k);
-  return s;
+  if(misses >= 2){
+    const w = round(last.вес * 0.9, PLAN.шаг);
+    return {вес:w, text:`Два раза не добрал повторы → сброс 10%: ${w} кг (было ${last.вес})`};
+  }
+  return {вес:last.вес, text:`Прошлый раз ${last.сделано.length} подх. по ${last.вес} кг → тот же вес, добери повторы`, muted:true};
 }
 
 function ensureSession(plan){
   const k = todayKey();
   let s = state.sessions.find(x => x.дата === k);
-  if(!s){
-    s = { дата:k, группа:plan.группа, упражнения: [] };
-    state.sessions.push(s);
-  }
+  if(!s){ s = { дата:k, группа:plan.группа, упражнения:[] }; state.sessions.push(s); }
   plan.упражнения.forEach(ex => {
     if(!s.упражнения.find(x => x.id === ex.id)){
-      const hint = hintFor(ex);
+      const h = suggest(ex);
       s.упражнения.push({ id:ex.id, имя:ex.имя, подходы: Array.from({length:ex.подходы},()=>({
-        вес: hint.вес ?? "", повторы:"", готово:false
+        вес: h.вес ?? "", повторы:"", готово:false
       }))});
     }
   });
@@ -160,15 +205,42 @@ function ensureSession(plan){
   return s;
 }
 
-function renderToday(){
-  const wd = dayOfWeek();
-  const plan = planFor(wd);
-  const title = document.getElementById("title");
-  const sub = document.getElementById("subtitle");
-  const app = document.getElementById("app");
+function warmups(w){
+  if(!w || +w <= PLAN.шаг*2) return [];
+  return [0.4, 0.6, 0.8].map(p => round(+w * p, PLAN.шаг)).filter(x => x > 0 && x < +w);
+}
 
+/* ---------- таймер отдыха ---------- */
+let tick = null;
+function getTimer(){ try { return JSON.parse(localStorage.getItem(TKEY)) } catch(e){ return null } }
+function setTimer(o){ o ? localStorage.setItem(TKEY, JSON.stringify(o)) : localStorage.removeItem(TKEY); drawTimer(); }
+function startRest(sec){ const total = sec || PLAN.отдых; setTimer({end: Date.now() + total*1000, total}); }
+function drawTimer(){
+  const el = document.getElementById("timer");
+  const t = getTimer();
+  if(!t){ el.classList.remove("show","finished"); return; }
+  el.classList.add("show");
+  const left = Math.max(0, Math.round((t.end - Date.now())/1000));
+  document.getElementById("timerT").textContent = `${Math.floor(left/60)}:${String(left%60).padStart(2,"0")}`;
+  document.getElementById("timerL").textContent = left ? "отдых" : "отдых закончен";
+  el.classList.toggle("finished", left === 0);
+  if(!left && !t.beeped){
+    t.beeped = true; localStorage.setItem(TKEY, JSON.stringify(t));
+    if(navigator.vibrate) navigator.vibrate([200,100,200]);
+  }
+}
+if(!tick) tick = setInterval(drawTimer, 500);
+document.getElementById("timerPlus").onclick = () => { const t = getTimer(); if(!t) return; t.end += 15000; t.beeped = false; setTimer(t); };
+document.getElementById("timerStop").onclick = () => setTimer(null);
+
+/* ---------- экраны ---------- */
+function renderToday(){
+  const wd = new Date().getDay();
+  const plan = planFor(wd);
+  const title = document.getElementById("title"), sub = document.getElementById("subtitle"), app = document.getElementById("app");
   if(!plan){
-    const n = nextPlan(wd);
+    let n = null;
+    for(let i=1;i<=7;i++){ const p = planFor((wd+i)%7); if(p){ n = {p, через:i}; break; } }
     title.textContent = "Отдых";
     sub.textContent = new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"});
     app.innerHTML = `<div class="card"><div class="empty">Сегодня по плану отдыха.<br>
@@ -177,102 +249,131 @@ function renderToday(){
   }
   const s = ensureSession(plan);
   title.textContent = plan.группа[0].toUpperCase() + plan.группа.slice(1);
+  const doneEx = s.упражнения.filter(e => e.подходы.every(p => p.готово)).length;
   sub.innerHTML = `${new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"})}
-    · <span class="pill">${s.упражнения.filter(e=>e.подходы.every(p=>p.готово)).length}/${s.упражнения.length} готово</span>`;
+    · <span class="pill">${doneEx}/${s.упражнения.length} готово</span>`;
 
   app.innerHTML = s.упражнения.map((e, ei) => {
     const ex = plan.упражнения.find(x => x.id === e.id);
-    const h = hintFor(ex);
+    const h = suggest(ex);
     const allDone = e.подходы.every(p => p.готово);
+    const best = bestBefore(e.id);
+    const wu = warmups(e.подходы[0].вес);
     return `<section class="card ${allDone ? "done" : ""}">
       <div class="exhead"><div class="exname">${e.имя}</div>
         <div class="plan">${ex.подходы} × ${ex.низ}–${ex.верх}</div></div>
       <div class="hint ${h.muted ? "muted" : ""}">${h.text}</div>
+      ${wu.length ? `<div class="warmup"><div class="wt">разминка</div>
+        ${wu.map(w => `<div class="wr"><span>${Math.round(w/(+e.подходы[0].вес||1)*100)}%</span><span>${w} кг × 8–10</span></div>`).join("")}
+      </div>` : ""}
       <div class="sets">
-        ${e.подходы.map((p, pi) => `<div class="set">
-          <div class="n">${pi+1}</div>
+        ${e.подходы.map((p, pi) => {
+          const rec = p.готово && +p.вес > best && best > 0;
+          return `<div class="set">
+          <div class="n">${pi+1}${rec ? ' <span class="pill rec">PR</span>' : ""}</div>
           <input type="number" inputmode="decimal" step="1.25" min="0" placeholder="кг"
                  value="${p.вес}" data-ex="${ei}" data-set="${pi}" data-f="вес">
           <input type="number" inputmode="numeric" step="1" min="0" placeholder="повт."
                  value="${p.повторы}" data-ex="${ei}" data-set="${pi}" data-f="повторы">
           <div class="chk ${p.готово ? "on" : ""}" data-ex="${ei}" data-set="${pi}">✓</div>
-        </div>`).join("")}
+        </div>`}).join("")}
       </div>
     </section>`;
   }).join("") + `<div class="card"><button class="btn" id="finish">Закончить тренировку</button></div>`;
 
-  app.querySelectorAll("input[type=number]").forEach(inp => {
-    inp.addEventListener("input", ev => {
-      const {ex, set, f} = ev.target.dataset;
-      s.упражнения[+ex].подходы[+set][f] = ev.target.value;
-      save(state);
-    });
-  });
-  app.querySelectorAll(".chk").forEach(chk => {
-    chk.addEventListener("click", ev => {
-      const {ex, set} = ev.currentTarget.dataset;
-      const p = s.упражнения[+ex].подходы[+set];
-      p.готово = !p.готово;
-      save(state);
-      renderToday();
-    });
-  });
-  const fin = document.getElementById("finish");
-  if(fin) fin.addEventListener("click", () => {
-    const done = s.упражнения.reduce((n,e) => n + e.подходы.filter(p=>p.готово).length, 0);
+  app.querySelectorAll("input[type=number]").forEach(inp => inp.addEventListener("input", ev => {
+    const {ex, set, f} = ev.target.dataset;
+    s.упражнения[+ex].подходы[+set][f] = ev.target.value; save(state);
+  }));
+  app.querySelectorAll(".chk").forEach(chk => chk.addEventListener("click", ev => {
+    const {ex, set} = ev.currentTarget.dataset;
+    const p = s.упражнения[+ex].подходы[+set];
+    p.готово = !p.готово;
+    if(p.готово && +p.вес > 0 && !p.повторы) p.повторы = ex_верх(plan, s.упражнения[+ex].id);
+    save(state);
+    if(p.готово) startRest();
+    renderToday();
+  }));
+  document.getElementById("finish").onclick = () => {
+    const done = s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0);
     if(!done){ alert("Пока ни одного подхода не отмечено."); return; }
     alert(`Готово: ${done} подходов. Данные сохранены на телефоне.`);
     tab = "progress"; render();
-  });
+  };
 }
+const ex_верх = (plan, id) => { const ex = plan.упражнения.find(x => x.id === id); return ex ? String(ex.верх) : ""; };
 
 function renderProgress(){
   const app = document.getElementById("app");
   document.getElementById("title").textContent = "Прогресс";
   const sessions = state.sessions.filter(s => s.упражнения.some(e => e.подходы.some(p => p.готово)));
   document.getElementById("subtitle").innerHTML = `тренировок: ${sessions.length}`;
-  if(!sessions.length){ app.innerHTML = `<div class="card"><div class="empty">Пока пусто. Отметь первый подход — и здесь появится история.</div></div>`; return; }
 
   const byEx = new Map();
   sessions.forEach(s => s.упражнения.forEach(e => {
     const done = e.подходы.filter(p => p.готово && +p.вес > 0);
     if(!done.length) return;
     const vol = done.reduce((n,p) => n + (+p.вес) * (+p.повторы || 0), 0);
-    const best = Math.max(...done.map(p => +p.вес));
     if(!byEx.has(e.id)) byEx.set(e.id, {имя:e.имя, точки:[]});
-    byEx.get(e.id).точки.push({дата:s.дата, best, vol});
+    byEx.get(e.id).точки.push({дата:s.дата, best:Math.max(...done.map(p => +p.вес)), vol});
   }));
 
-  app.innerHTML = [...byEx.entries()].map(([id, v]) => {
-    const pts = v.точки.slice(-6);
-    const max = Math.max(...pts.map(p => p.vol)) || 1;
-    const last = pts[pts.length-1];
-    return `<section class="card">
-      <div class="exhead"><div class="exname">${v.имя}</div>
-        <div class="plan">макс ${Math.max(...v.точки.map(p=>p.best))} кг</div></div>
-      <div class="hint muted">последний раз ${fmtDate(last.дата)} · объём ${last.vol} кг</div>
-      <div class="hist">${pts.map(p => `<div class="hbar">
-        <span>${fmtDate(p.дата)}</span>
-        <span class="bar"><i style="width:${Math.round(p.vol/max*100)}%"></i></span>
-        <span>${p.vol}</span></div>`).join("")}</div>
-    </section>`;
-  }).join("");
+  let html = "";
+  if(!sessions.length){
+    html += `<div class="card"><div class="empty">Пока пусто. Отметь первый подход — и здесь появится история.</div></div>`;
+  } else {
+    html += [...byEx.entries()].map(([id, v]) => {
+      const pts = v.точки.slice(-6);
+      const max = Math.max(...pts.map(p => p.vol)) || 1;
+      const last = pts[pts.length-1];
+      const best = Math.max(...v.точки.map(p => p.best));
+      return `<section class="card">
+        <div class="exhead"><div class="exname">${v.имя}</div><div class="plan">рекорд ${best} кг</div></div>
+        <div class="hint muted">последний раз ${fmtDate(last.дата)} · объём ${last.vol} кг</div>
+        <div class="hist">${pts.map(p => `<div class="hbar">
+          <span>${fmtDate(p.дата)}</span>
+          <span class="bar"><i style="width:${Math.round(p.vol/max*100)}%"></i></span>
+          <span>${p.vol}</span></div>`).join("")}</div>
+      </section>`;
+    }).join("");
+  }
+  app.innerHTML = html;
 }
 
 function renderSettings(){
   const app = document.getElementById("app");
   document.getElementById("title").textContent = "Ещё";
-  document.getElementById("subtitle").textContent = "данные хранятся только на этом телефоне";
-  const total = state.sessions.length;
+  document.getElementById("subtitle").textContent = "данные только на этом телефоне";
+
+  const bw = (state.вес || []).slice(-10);
+  const pts = bw.map(x => x.кг);
+  const maxW = Math.max(...pts, 1), minW = Math.min(...pts, maxW - 1);
+  const line = bw.length > 1 ? bw.map((x,i) => {
+    const X = 10 + i * (280 / (bw.length - 1));
+    const Y = 100 - ((x.кг - minW) / Math.max(1, maxW - minW)) * 80;
+    return `${X.toFixed(1)},${Y.toFixed(1)}`;
+  }).join(" ") : "";
+
   app.innerHTML = `
     <section class="card">
-      <div class="exhead"><div class="exname">Данные</div><div class="plan">${total} записей</div></div>
+      <div class="exhead"><div class="exname">Вес тела</div><div class="plan">${bw.length ? bw[bw.length-1].кг + " кг" : "нет данных"}</div></div>
+      <div class="bwbox">
+        <input type="number" id="bw" step="0.1" min="30" max="250" placeholder="кг" inputmode="decimal">
+        <button class="btn ghost" id="bwAdd" style="width:auto">Записать</button>
+      </div>
+      ${bw.length > 1 ? `<svg class="chart" viewBox="0 0 300 110" preserveAspectRatio="none">
+        <polyline fill="none" stroke="#5b9cff" stroke-width="2" points="${line}"/></svg>
+        <div class="k">${fmtDate(bw[0].дата)} → ${fmtDate(bw[bw.length-1].дата)}</div>` : `<div class="k" style="margin-top:8px">Добавь два замера — появится график</div>`}
+    </section>
+    <section class="card">
+      <div class="exhead"><div class="exname">Данные</div><div class="plan">${state.sessions.length} записей</div></div>
       <div class="hint muted">Ничего не уходит в интернет. Синхронизации нет.</div>
-      <div class="row"><button class="btn ghost" id="export">Скопировать JSON</button></div>
+      <div class="row" style="margin-bottom:8px"><button class="btn ghost" id="export">Скопировать JSON</button></div>
+      <div class="row"><label class="btn ghost" style="text-align:center;display:block">Загрузить JSON<input type="file" id="import" accept=".json" hidden></label></div>
     </section>
     <section class="card">
       <div class="exhead"><div class="exname">Сброс</div></div>
-      <div class="hint">Удалит всю историю на этом телефоне.</div>
+      <div class="hint">Удалит всю историю и замеры веса.</div>
       <button class="btn ghost" id="reset">Стереть всё</button>
     </section>
     <section class="card">
@@ -280,13 +381,36 @@ function renderSettings(){
       <div class="hint muted">Вторник — спина и плечи · Четверг — грудь и руки · Суббота или воскресенье — ноги и пресс.<br>
       Без осевой нагрузки: протрузия поясницы.</div>
     </section>`;
+
+  document.getElementById("bwAdd").onclick = () => {
+    const v = +document.getElementById("bw").value;
+    if(!v || v < 30 || v > 250){ alert("Введи вес в кг"); return; }
+    state.вес = state.вес || [];
+    const k = todayKey();
+    const ex = state.вес.find(x => x.дата === k);
+    if(ex) ex.кг = v; else state.вес.push({дата:k, кг:v});
+    save(state); renderSettings();
+  };
   document.getElementById("export").onclick = async () => {
     const txt = JSON.stringify(state, null, 1);
     try { await navigator.clipboard.writeText(txt); alert("JSON скопирован"); }
     catch(e){ prompt("Скопируй вручную:", txt); }
   };
+  document.getElementById("import").onchange = ev => {
+    const f = ev.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const d = JSON.parse(r.result);
+        if(!d || !Array.isArray(d.sessions)) throw 0;
+        if(!confirm(`Загрузить ${d.sessions.length} записей? Текущие данные будут заменены.`)) return;
+        state = {sessions:d.sessions, вес:d.вес || []}; save(state); render();
+      } catch(e){ alert("Не похоже на файл из этого приложения."); }
+    };
+    r.readAsText(f);
+  };
   document.getElementById("reset").onclick = () => {
-    if(confirm("Стереть всю историю?")){ state = {sessions:[]}; save(state); render(); }
+    if(confirm("Стереть всю историю?")){ state = {sessions:[], вес:[]}; save(state); render(); }
   };
 }
 
@@ -295,12 +419,12 @@ function render(){
   if(tab === "today") renderToday();
   else if(tab === "progress") renderProgress();
   else renderSettings();
+  drawTimer();
 }
 document.querySelectorAll(".nav button").forEach(b => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
 render();
 
-/* офлайн-режим: файлы кэшируются один раз, дальше приложение работает без сети */
-if ("serviceWorker" in navigator && location.protocol === "https:") {
+if("serviceWorker" in navigator && location.protocol === "https:"){
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 </script>
