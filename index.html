@@ -87,6 +87,13 @@
   .myth{padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
   .myth span{color:var(--muted);font-size:13px}
   .myth:last-child{border-bottom:0}
+  .note{font-size:13px;color:var(--text);background:rgba(91,156,255,.1);border-left:3px solid var(--acc);
+    border-radius:8px;padding:7px 10px;margin:0 0 8px}
+  .notebtn{font-size:12px;color:var(--muted);margin:0 0 10px;cursor:pointer}
+  .vrow{display:grid;grid-template-columns:96px 1fr 56px;gap:8px;align-items:center;font-size:13px;margin:6px 0}
+  .vrow .vt{color:var(--muted)}
+  .plate{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .plate span{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:13px}
   .erow{display:grid;grid-template-columns:1fr auto 28px;gap:10px;align-items:center;
     padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
   .erow:last-of-type{border-bottom:0}
@@ -131,41 +138,48 @@
 </div>
 <script>
 const PLAN = {
+  версия: 3,
   шаг: 2.5,
   отдых: 90,
   дни: [
     { wd:[2], группа:"спина и плечи", упражнения:[
-      {id:"pulldown", имя:"Тяга верхнего блока к груди", подходы:4, низ:8, верх:12, отдых:120},
-      {id:"row-supported", имя:"Тяга в тренажёре с упором в грудь", подходы:5, низ:8, верх:12, отдых:150},
-      {id:"pullover", имя:"Пуловер на верхнем блоке", подходы:3, низ:10, верх:12, отдых:90},
-      {id:"shoulder-press", имя:"Жим гантелей сидя (со спинкой)", подходы:4, низ:8, верх:12, отдых:150},
-      {id:"lateral-raise", имя:"Махи гантелями в стороны", подходы:4, низ:12, верх:15, отдых:75},
-      {id:"rear-delt", имя:"Разведения в наклоне (задняя дельта)", подходы:4, низ:12, верх:15, отдых:75}
+      {id:"hammer-row-high", имя:"Тяга верхняя в Хаммере", подходы:4, низ:8, верх:12, отдых:150, гр:"спина"},
+      {id:"row-seated", имя:"Тяга сидя к поясу", подходы:4, низ:8, верх:12, отдых:150, гр:"спина"},
+      {id:"pulldown", имя:"Тяга верхнего блока к груди", подходы:3, низ:10, верх:12, отдых:120, гр:"спина"},
+      {id:"pullover", имя:"Пуловер на верхнем блоке", подходы:3, низ:10, верх:12, отдых:90, гр:"спина"},
+      {id:"shoulder-press", имя:"Жим на плечи в Хаммере или гантели сидя", подходы:4, низ:8, верх:12, отдых:150, гр:"плечи"},
+      {id:"lateral-raise", имя:"Махи гантелями в стороны", подходы:4, низ:12, верх:15, отдых:75, гр:"плечи"},
+      {id:"rear-delt", имя:"Задняя дельта: разведение с упором", подходы:4, низ:12, верх:15, отдых:75, гр:"плечи"},
+      {id:"biceps-machine", имя:"Бицепс в тренажёре", подходы:3, низ:10, верх:12, отдых:90, гр:"бицепс"}
     ]},
     { wd:[4], группа:"грудь и руки", упражнения:[
-      {id:"bench-press", имя:"Жим штанги лёжа", подходы:4, низ:6, верх:10, отдых:180},
-      {id:"incline-db", имя:"Жим гантелей на наклонной", подходы:3, низ:8, верх:12, отдых:120},
-      {id:"crossover", имя:"Сведения в кроссовере", подходы:3, низ:12, верх:15, отдых:75},
-      {id:"biceps-bar", имя:"Подъём штанги на бицепс", подходы:3, низ:10, верх:12, отдых:90},
-      {id:"triceps-pushdown", имя:"Разгибание на трицепс на блоке", подходы:3, низ:10, верх:12, отдых:75},
-      {id:"hammer-curl", имя:"Молотки сидя", подходы:3, низ:10, верх:12, отдых:90},
-      {id:"triceps-overhead", имя:"Разгибание из-за головы (трицепс)", подходы:3, низ:10, верх:12, отдых:75}
+      {id:"hammer-press", имя:"Жим от груди в Хаммере", подходы:4, низ:8, верх:12, отдых:150, гр:"грудь"},
+      {id:"db-press-mid", имя:"Жим гантелей на середину груди", подходы:3, низ:8, верх:12, отдых:120, гр:"грудь"},
+      {id:"peck-deck", имя:"Бабочка (пек-дек)", подходы:3, низ:12, верх:15, отдых:75, гр:"грудь"},
+      {id:"crossover", имя:"Разведение в кроссовере", подходы:3, низ:12, верх:15, отдых:75, гр:"грудь"},
+      {id:"triceps-overhead", имя:"Трицепс в кроссовере из-за головы", подходы:3, низ:10, верх:12, отдых:75, гр:"трицепс"},
+      {id:"triceps-pushdown", имя:"Разгибание на трицепс на блоке", подходы:3, низ:10, верх:12, отдых:75, гр:"трицепс"},
+      {id:"biceps-machine2", имя:"Бицепс в тренажёре (или штанга сидя)", подходы:3, низ:10, верх:12, отдых:90, гр:"бицепс"},
+      {id:"hammer-curl", имя:"Молотки сидя", подходы:3, низ:10, верх:12, отдых:90, гр:"бицепс"}
     ]},
     { wd:[6,0], группа:"ноги и пресс", упражнения:[
-      {id:"leg-press", имя:"Жим ногами", подходы:4, низ:10, верх:12, отдых:180},
-      {id:"leg-extension", имя:"Разгибание ног сидя", подходы:4, низ:12, верх:15, отдых:90},
-      {id:"leg-curl", имя:"Сгибание ног лёжа", подходы:5, низ:10, верх:15, отдых:90},
-      {id:"single-leg-curl", имя:"Сгибание одной ногой", подходы:3, низ:10, верх:12, отдых:75},
-      {id:"glute-bridge", имя:"Ягодичный мост с блином", подходы:4, низ:12, верх:15, отдых:90},
-      {id:"calf-raise", имя:"Подъём на носки стоя", подходы:5, низ:15, верх:20, отдых:60},
-      {id:"seated-calf", имя:"Подъём на носки сидя", подходы:3, низ:15, верх:20, отдых:60},
-      {id:"dead-bug", имя:"Мёртвый жук", подходы:4, низ:8, верх:8, отдых:60}
+      {id:"leg-press", имя:"Жим ногами", подходы:4, низ:10, верх:12, отдых:180, гр:"квадрицепс"},
+      {id:"machine-squat", имя:"Приседание в тренажёре (спина прижата, амплитуда не в пол)", подходы:3, низ:10, верх:12, отдых:150, гр:"квадрицепс"},
+      {id:"leg-extension", имя:"Разгибание ног сидя", подходы:4, низ:12, верх:15, отдых:90, гр:"квадрицепс"},
+      {id:"leg-curl", имя:"Сгибание ног лёжа", подходы:5, низ:10, верх:15, отдых:90, гр:"бицепс бедра"},
+      {id:"single-leg-curl", имя:"Сгибание одной ногой", подходы:3, низ:10, верх:12, отдых:75, гр:"бицепс бедра"},
+      {id:"hip-abduction", имя:"Тренажёр сидя на ягодицы", подходы:4, низ:12, верх:15, отдых:90, гр:"ягодицы"},
+      {id:"glute-bridge", имя:"Ягодичный мост с блином", подходы:3, низ:12, верх:15, отдых:90, гр:"ягодицы"},
+      {id:"calf-raise", имя:"Икры в тренажёре стоя", подходы:5, низ:15, верх:20, отдых:60, гр:"икры"},
+      {id:"seated-calf", имя:"Икры сидя", подходы:3, низ:15, верх:20, отдых:60, гр:"икры"},
+      {id:"dead-bug", имя:"Мёртвый жук", подходы:3, низ:8, верх:8, отдых:60, гр:"пресс"},
+      {id:"plank", имя:"Планка (секунды)", подходы:3, низ:45, верх:60, отдых:60, гр:"пресс"}
     ]}
   ]
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
-const VERSION = "2.4";
+const VERSION = "2.5";
 
 /* Техника: короткие подсказки своими словами. Перед началом — 5–10 минут разминки. */
 const TIPS = {
@@ -230,6 +244,47 @@ const TIPS = {
     "Полная амплитуда: пятка вниз до растяжения, вверх до упора",
     "Вверху задержка на секунду"],
     ошибки:"пружинить, работать в короткой амплитуде, гнаться за весом" },
+
+  "hammer-row-high": { подсказки:["Грудь прижата к упору, корпус не работает",
+    "Тяни локтями вниз и назад, лопатки сводятся",
+    "Возврат медленный, без броска"],
+    ошибки:"отрывать грудь от упора, помогать корпусом, дёргать вес" },
+  "row-seated": { подсказки:["Сиди плотно, спина с лёгким наклоном, поясница не круглая",
+    "Тяни рукоятки к низу живота, локти вдоль корпуса",
+    "В конце сведи лопатки, на возврате растяни"],
+    ошибки:"раскачиваться корпусом, круглить спину, тянуть руками без лопаток" },
+  "hammer-press": { подсказки:["Спинка настроена так, чтобы кисти были на уровне середины груди",
+    "Локти под 45°, без разведения в стороны",
+    "Жми плавно, не выпрямляй локти в замок"],
+    ошибки:"отрывать плечи от спинки, отбивать вес, слишком глубокий ход" },
+  "db-press-mid": { подсказки:["Гантели над серединой груди, локти под 45°",
+    "Опускай до комфортной глубины, без растяжения",
+    "Стопы в пол, поясница с естественным прогибом"],
+    ошибки:"разводить локти под 90°, стучать гантелями, выгибать поясницу мостом" },
+  "peck-deck": { подсказки:["Локти или кисти на уровне груди, плечи вниз",
+    "Сведи и задержись на секунду",
+    "Возврат медленный — растянутая часть важнее веса"],
+    ошибки:"гнаться за весом, отрывать спину от спинки, резко бросать" },
+  "biceps-machine": { подсказки:["Локти на подушке, плечи прижаты",
+    "Сгибай без раскачки, опускай до конца",
+    "Внизу не бросай — держи напряжение"],
+    ошибки:"отрывать локти, помогать корпусом, читинг" },
+  "biceps-machine2": { подсказки:["Сиди с опорой спины, локти прижаты",
+    "Поднимай за счёт сгибания локтя, без наклона корпуса",
+    "Опускай медленнее, чем поднимаешь"],
+    ошибки:"раскачиваться корпусом, отрывать локти, брать лишний вес" },
+  "hip-abduction": { подсказки:["Сиди плотно, спина прижата к спинке",
+    "Разводи колени плавно, в конце пауза",
+    "Своди медленно, без удара"],
+    ошибки:"рывками, отрывать таз, гнаться за весом" },
+  "machine-squat": { подсказки:["Спина прижата к спинке всё время, пятки на платформе",
+    "Амплитуда не в пол — до комфортного угла, таз не подкручивается",
+    "Колени идут по направлению стоп, не внутрь"],
+    ошибки:"уходить глубоко с округлением таза, отрывать пятки, делать через боль" },
+  "plank": { подсказки:["Локти под плечами, тело — одна линия",
+    "Пресс и ягодицы в тонусе, поясница не провисает",
+    "Дыши ровно, не задерживай дыхание"],
+    ошибки:"провисать в пояснице, поднимать таз, задерживать дыхание" },
 
   "leg-press": { подсказки:["Поясница и таз прижаты к спинке — это главное при протрузии",
     "Колени идут по направлению стоп, не заваливаются внутрь",
@@ -301,7 +356,12 @@ const МИФЫ = [
 const load = () => { try { const s = JSON.parse(localStorage.getItem(KEY)); return s && s.sessions ? s : {sessions:[], вес:[]} } catch(e){ return {sessions:[], вес:[]} } };
 const save = s => localStorage.setItem(KEY, JSON.stringify(s));
 let state = load();
-if(!state.план){ state.план = JSON.parse(JSON.stringify(PLAN)); save(state); }
+if(!state.заметки) state.заметки = {};
+/* новый стандартный план подставляем, только если свой план не правили руками */
+if(!state.план || (!state.план.свой && state.план.версия !== PLAN.версия)){
+  state.план = JSON.parse(JSON.stringify(PLAN));
+  save(state);
+}
 let tab = "today";
 let manualPlan = null;
 
@@ -438,6 +498,8 @@ function renderToday(){
       <div class="exhead"><div class="exname">${e.имя}</div>
         <div class="plan">${ex.подходы} × ${ex.низ}–${ex.верх}<span class="tbtn" data-rest="${ex.отдых || 90}">⏱</span></div></div>
       <div class="hint ${h.muted ? "muted" : ""}">${h.text}</div>
+      ${state.заметки[e.id] ? `<div class="note">${state.заметки[e.id]}</div>` : ""}
+      <div class="notebtn" data-note="${e.id}">✎ ${state.заметки[e.id] ? "изменить заметку" : "заметка"}</div>
       ${(t => t ? `<details class="tech"><summary>техника и подсказки</summary>
         <ul>${t.подсказки.map(c => `<li>${c}</li>`).join("")}</ul>
         <div class="bad">Чего избегать: ${t.ошибки}</div>
@@ -480,6 +542,13 @@ function renderToday(){
   app.querySelectorAll(".tbtn").forEach(b => b.addEventListener("click", ev => {
     startRest(+ev.currentTarget.dataset.rest || P().отдых);
   }));
+  app.querySelectorAll("[data-note]").forEach(b => b.addEventListener("click", () => {
+    const id = b.dataset.note;
+    const v = prompt("Заметка к упражнению", state.заметки[id] || "");
+    if(v === null) return;
+    if(v.trim()) state.заметки[id] = v.trim(); else delete state.заметки[id];
+    save(state); renderToday();
+  }));
   document.getElementById("finish").onclick = () => {
     const done = s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0);
     if(!done){ alert("Пока ни одного подхода не отмечено."); return; }
@@ -505,6 +574,25 @@ function renderProgress(){
   }));
 
   let html = "";
+
+  /* объём за неделю по группам мышц — из текущего плана */
+  const groups = {};
+  P().дни.forEach(d => d.упражнения.forEach(e => {
+    const g = e.гр || "прочее";
+    groups[g] = (groups[g] || 0) + e.подходы;
+  }));
+  const gmax = Math.max(20, ...Object.values(groups));
+  html += `<section class="card">
+    <div class="exhead"><div class="exname">Объём за неделю</div><div class="plan">подходов</div></div>
+    <div class="hint muted">Рабочая зона 8–20 подходов на группу в неделю. Ниже 8 — роста почти нет, выше 20 — лишняя усталость.</div>
+    ${Object.entries(groups).map(([g, n]) => {
+      const ok = n >= 8 && n <= 20;
+      return `<div class="vrow"><span class="vt">${g}</span>
+        <span class="bar"><i style="width:${Math.round(n/gmax*100)}%;background:${ok ? "var(--ok)" : "var(--warn)"}"></i></span>
+        <span>${n}${ok ? "" : n < 8 ? " ⚠" : " ↑"}</span></div>`;
+    }).join("")}
+  </section>`;
+
   if(!sessions.length){
     html += `<div class="card"><div class="empty">Пока пусто. Отметь первый подход — и здесь появится история.</div></div>`;
   } else {
@@ -513,9 +601,16 @@ function renderProgress(){
       const max = Math.max(...pts.map(p => p.vol)) || 1;
       const last = pts[pts.length-1];
       const best = Math.max(...v.точки.map(p => p.best));
+      /* оценка 1ПМ по формуле Эпли: вес × (1 + повторы / 30) */
+      let rm = 0;
+      sessions.forEach(s => s.упражнения.filter(e => e.id === id).forEach(e =>
+        e.подходы.filter(p => p.готово && +p.вес > 0 && +p.повторы > 0).forEach(p => {
+          const est = (+p.вес) * (1 + (+p.повторы) / 30);
+          if(est > rm) rm = est;
+        })));
       return `<section class="card">
         <div class="exhead"><div class="exname">${v.имя}</div><div class="plan">рекорд ${best} кг</div></div>
-        <div class="hint muted">последний раз ${fmtDate(last.дата)} · объём ${last.vol} кг</div>
+        <div class="hint muted">последний раз ${fmtDate(last.дата)} · объём ${last.vol} кг${rm ? ` · оценка 1ПМ ≈ ${Math.round(rm*2)/2} кг` : ""}</div>
         <div class="hist">${pts.map(p => `<div class="hbar">
           <span>${fmtDate(p.дата)}</span>
           <span class="bar"><i style="width:${Math.round(p.vol/max*100)}%"></i></span>
@@ -576,6 +671,7 @@ function renderPlan(){
     e.имя = name.trim() || e.имя;
     e.подходы = Math.max(1, Math.min(10, +sets || e.подходы));
     if(m){ e.низ = +m[1]; e.верх = +m[2]; } else if(+reps){ e.низ = e.верх = +reps; }
+    P().свой = true;
     save(state); renderPlan();
   }));
   app.querySelectorAll(".del").forEach(x => x.addEventListener("click", ev => {
@@ -584,6 +680,7 @@ function renderPlan(){
     const e = P().дни[di].упражнения[ei];
     if(!confirm(`Убрать «${e.имя}» из плана?`)) return;
     P().дни[di].упражнения.splice(ei, 1);
+    P().свой = true;
     save(state); renderPlan();
   }));
   app.querySelectorAll("[data-add]").forEach(b => b.addEventListener("click", () => {
@@ -599,11 +696,13 @@ function renderPlan(){
       имя: name.trim(), подходы: Math.max(1, Math.min(10, +sets || 3)),
       низ: lo, верх: hi, отдых: 90
     });
+    P().свой = true;
     save(state); renderPlan();
   }));
   document.getElementById("planReset").onclick = () => {
     if(!confirm("Вернуть стандартный план? Твои изменения плана пропадут, история тренировок останется.")) return;
     state.план = JSON.parse(JSON.stringify(PLAN));
+    P().свой = true;
     save(state); renderPlan();
   };
 }
@@ -649,6 +748,15 @@ function renderSettings(){
       ${days.length > 1 ? `<svg class="chart" viewBox="0 0 300 110" preserveAspectRatio="none">
         <polyline fill="none" stroke="#5b9cff" stroke-width="2" points="${line}"/></svg>
         <div class="k">${fmtDate(days[0].дата)} → ${fmtDate(days[days.length-1].дата)}</div>` : `<div class="k" style="margin-top:8px">Добавь два замера — появится график</div>`}
+    </section>
+    <section class="card">
+      <div class="exhead"><div class="exname">Калькулятор блинов</div><div class="plan">гриф 20 кг</div></div>
+      <div class="bwbox">
+        <input type="number" id="plW" step="2.5" min="0" placeholder="вес" inputmode="decimal">
+        <input type="number" id="plBar" step="5" min="0" value="20" style="max-width:90px" inputmode="numeric">
+        <button class="btn ghost" id="plGo" style="width:auto">Считать</button>
+      </div>
+      <div id="plOut" class="plate"></div>
     </section>
     <section class="card">
       <div class="exhead"><div class="exname">Данные</div><div class="plan">${state.sessions.length} записей</div></div>
@@ -704,6 +812,20 @@ function renderSettings(){
   };
   document.getElementById("reset").onclick = () => {
     if(confirm("Стереть всю историю?")){ state = {sessions:[], вес:[], план:state.план}; save(state); render(); }
+  };
+  document.getElementById("plGo").onclick = () => {
+    const total = +document.getElementById("plW").value;
+    const bar = +document.getElementById("plBar").value || 20;
+    const out = document.getElementById("plOut");
+    if(!total || total < bar){ out.innerHTML = `<span>вес должен быть больше грифа (${bar} кг)</span>`; return; }
+    let perSide = (total - bar) / 2;
+    const plates = [25, 20, 15, 10, 5, 2.5, 1.25];
+    const used = [];
+    plates.forEach(pl => { while(perSide >= pl - 0.001){ used.push(pl); perSide -= pl; } });
+    const left = Math.round(perSide * 100) / 100;
+    out.innerHTML = used.length
+      ? `<span>на сторону: ${used.join(" + ")}</span>${left > 0.01 ? `<span>остаток ${left} кг</span>` : ""}`
+      : `<span>только гриф</span>`;
   };
   document.getElementById("editPlan").onclick = () => { tab = "plan"; render(); };
   document.getElementById("upd").onclick = async () => {
