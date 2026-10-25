@@ -149,6 +149,7 @@
   <button data-tab="today" class="on"><span class="ico">🏋️</span>Сегодня</button>
   <button data-tab="progress"><span class="ico">📈</span>Прогресс</button>
   <button data-tab="science"><span class="ico">🔬</span>Наука</button>
+  <button data-tab="medic"><span class="ico">🩺</span>Медик</button>
   <button data-tab="settings"><span class="ico">⚙️</span>Ещё</button>
 </div>
 <script>
@@ -857,6 +858,114 @@ function renderScience(){
   Поясница и допустимые веса — только с лечащим врачом. Полный разбор с 63 источниками — в файле наука.md.</div></section>`;
 }
 
+function renderMedic(){
+  const app = document.getElementById("app");
+  document.getElementById("title").textContent = "Медик";
+  document.getElementById("subtitle").textContent = "личный контроль здоровья";
+
+  const days = state.дни || {};
+  const keys = Object.keys(days).sort().slice(-7);
+  const num = v => +v || 0;
+  const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+  const sleep = avg(keys.map(k => num(days[k].сон)).filter(Boolean));
+  const prot = avg(keys.map(k => num(days[k].белок)).filter(Boolean));
+  const w = state.вес && state.вес.length ? state.вес[state.вес.length - 1] : null;
+  const norm = w ? Math.round(1.6 * w.кг) : null;
+  const week = Date.now() - 7 * 864e5;
+  const sess = state.sessions.filter(s => new Date(s.дата).getTime() > week).length;
+  const row = (label, val, note) => `<div class="wr"><span>${label}</span><span>${val}${note ? " · " + note : ""}</span></div>`;
+
+  const flags = [
+    "давящая боль или сжатие в груди, особенно при нагрузке",
+    "одышка в покое или при разговоре",
+    "обморок, предобморочное состояние, внезапное онемение или асимметрия лица",
+    "резкая небывалая головная боль",
+    "давление 180/110 и выше",
+    "кровь в моче, кале или рвота с кровью",
+    "температура выше 38 больше трёх дней",
+    "потеря веса больше 5% за месяц без цели",
+    "отёки на ногах, которые не проходят за ночь"
+  ].map(t => `<li>${t}</li>`).join("");
+
+  const annual = [
+    "общий анализ крови с лейкоцитарной формулой",
+    "глюкоза натощак и HbA1c",
+    "липидограмма: общий холестерин, ЛПНП, ЛПВП, триглицериды",
+    "биохимия: АЛТ, АСТ, билирубин, креатинин с расчётом СКФ, мочевая кислота",
+    "ТТГ",
+    "ферритин и железо — если есть утомляемость",
+    "витамин D 25-ОН — по показаниям, зимой часто низкий",
+    "ЭКГ и давление — с 35–40 лет, раньше при жалобах",
+    "ПСА — мужчинам после 40–45, решение с врачом"
+  ].map(t => `<li>${t}</li>`).join("");
+
+  const home = [
+    "давление: 2 раза в день, 7 дней подряд, сидя после 5 минут покоя — это информативнее одного замера в кабинете",
+    "пульс покоя утром, до кофе",
+    "вес: раз в неделю, утром натощак, иначе шум",
+    "талия: раз в месяц, по пупку",
+    "сон и белок — они уже в блоке «День»"
+  ].map(t => `<li>${t}</li>`).join("");
+
+  const reading = [
+    "референсы у каждой лаборатории свои, чужой бланк ничего не значит",
+    "один результат — не диагноз, смотри тренд из трёх точек",
+    "перед выводами повтор через 2–4 недели: сон, нагрузка, алкоголь и обезвоживание меняют цифры",
+    "норма и оптимум — разные вещи: «в пределах» не всегда «хорошо»",
+    "не лечить цифру: лечат человека, а не показатель"
+  ].map(t => `<li>${t}</li>`).join("");
+
+  const questions = [
+    "как давно это началось и что меняет состояние",
+    "что уже проверяли и какие результаты",
+    "какие лекарства и добавки принимаю постоянно",
+    "наследственность: инфаркты, инсульты, диабет, онкология у родных до 60",
+    "сон, алкоголь, курение, кофеин",
+    "что я хочу понять: успокоиться, найти причину или получить план"
+  ].map(t => `<li>${t}</li>`).join("");
+
+  app.innerHTML = `
+  <section class="card">
+    <div class="exhead"><div class="exname">Мои цифры за неделю</div><div class="plan">${keys.length ? keys.length + " дн." : "нет данных"}</div></div>
+    ${row("сон", sleep ? sleep + " ч" : "—", sleep && sleep < 7 ? "мало" : "")}
+    ${row("белок", prot ? prot + " г" : "—", norm ? "норма около " + norm + " г" : "")}
+    ${row("вес", w ? w.кг + " кг" : "—", w ? fmtDate(w.дата) : "")}
+    ${row("тренировок за 7 дней", sess)}
+    <div class="hint muted" style="margin-top:8px">Берётся из блока «День» и журнала тренировок. Пусто — значит не заполнено.</div>
+  </section>
+
+  <section class="card">
+    <div class="exhead"><div class="exname">Красные флаги</div><div class="plan">к врачу сразу</div></div>
+    <div class="hint muted">Это не «понаблюдать». С таким идут в приёмное отделение или вызывают скорую.</div>
+    <ul>${flags}</ul>
+  </section>
+
+  <section class="card">
+    <div class="exhead"><div class="exname">Раз в год: базовый набор</div><div class="plan">чек-лист</div></div>
+    <div class="hint muted">Не назначение. Список того, что обсуждают с врачом, чтобы не забыть.</div>
+    <ul>${annual}</ul>
+  </section>
+
+  <section class="card">
+    <div class="exhead"><div class="exname">Дома: что мерить</div><div class="plan">без гаджетов</div></div>
+    <ul>${home}</ul>
+  </section>
+
+  <section class="card">
+    <div class="exhead"><div class="exname">Как читать анализы</div><div class="plan">правила</div></div>
+    <ul>${reading}</ul>
+  </section>
+
+  <section class="card">
+    <div class="exhead"><div class="exname">Что спросит дотошный медик</div><div class="plan">до выводов</div></div>
+    <ul>${questions}</ul>
+  </section>
+
+  <section class="card"><div class="hint muted">Раздел собран по открытым клиническим рекомендациям и служит памяткой,
+  а не заключением. Диагноз и лечение — только с врачом, который видит анализы и тебя целиком.
+  Красные флаги не обсуждаются в чате — с ними едут в больницу.</div></section>`;
+}
+
 function renderPlan(){
   const app = document.getElementById("app");
   document.getElementById("title").textContent = "План";
@@ -1190,6 +1299,7 @@ function render(){
   if(tab === "today") renderToday();
   else if(tab === "progress") renderProgress();
   else if(tab === "science") renderScience();
+  else if(tab === "medic") renderMedic();
   else if(tab === "plan") renderPlan();
   else renderSettings();
   drawTimer();
