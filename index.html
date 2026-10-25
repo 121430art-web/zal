@@ -194,7 +194,7 @@ const PLAN = {
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
-const VERSION = "2.8";
+const VERSION = "2.9";
 
 /* Техника: короткие подсказки своими словами. Перед началом — 5–10 минут разминки. */
 const TIPS = {
@@ -552,6 +552,57 @@ function showText(title, text){
   document.getElementById("mCancel").onclick = closeModal;
 }
 
+/* ---------- перестановка тренировок ---------- */
+function pickDay(){
+  const wd = new Date().getDay();
+  const cur = manualPlan || planFor(wd);
+  const days = P().дни;
+  const curIdx = days.findIndex(d => d === cur);
+  if(curIdx < 0){ toast("Сегодня отдых — выбери «Тренироваться сейчас»"); return; }
+  const box = document.getElementById("modalBox");
+  box.innerHTML = `<h3>На какую тренировку поменять?</h3>
+    <div class="hint muted" style="margin:8px 0 10px">Сейчас стоит: ${cur.группа}</div>
+    ${days.map((d, i) => i === curIdx ? "" :
+      `<button class="btn ghost" data-swap="${i}" style="margin-bottom:8px;width:100%">${d.группа} — ${d.день}</button>`).join("")}
+    <div class="acts"><button class="btn ghost" id="mCancel">Отмена</button></div>`;
+  document.getElementById("modal").classList.add("show");
+  document.getElementById("mCancel").onclick = closeModal;
+  box.querySelectorAll("[data-swap]").forEach(b => b.onclick = () => {
+    closeModal();
+    swapWith(curIdx, +b.dataset.swap);
+  });
+}
+
+function swapWith(fromIdx, toIdx){
+  const days = P().дни;
+  if(fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+  const A = days[fromIdx], B = days[toIdx];
+  const wa = A.wd;
+  A.wd = B.wd;
+  B.wd = wa;
+  P().свой = true;
+
+  const k = todayKey();
+  const s = state.sessions.find(x => x.дата === k);
+  const done = s && s.упражнения.some(e => e.подходы.some(p => p.готово));
+
+  const apply = () => {
+    state.sessions = state.sessions.filter(x => x.дата !== k);
+    manualPlan = null;
+    save(state);
+    render();
+    toast(`${B.группа[0].toUpperCase() + B.группа.slice(1)} сегодня, ${A.группа} — ${B.день}`);
+  };
+
+  if(done){
+    ask("Сегодня уже есть подходы",
+        "Они записаны по другой тренировке. Начать новую и удалить введённое сегодня?",
+        apply);
+  } else {
+    apply();
+  }
+}
+
 /* ---------- таймер отдыха ---------- */
 let tick = null;
 function getTimer(){ try { return JSON.parse(localStorage.getItem(TKEY)) } catch(e){ return null } }
@@ -632,7 +683,9 @@ function renderToday(){
         </div>`}).join("")}
       </div>
     </section>`;
-  }).join("") + `<div class="card"><button class="btn" id="finish">Закончить тренировку</button></div>`;
+  }).join("") + `<div class="card">
+    <button class="btn ghost" id="swapDay" style="margin-bottom:10px">↔ Поменять тренировку</button>
+    <button class="btn" id="finish">Закончить тренировку</button></div>`;
 
   app.querySelectorAll("input[type=number]").forEach(inp => inp.addEventListener("input", ev => {
     const {ex, set, f} = ev.target.dataset;
@@ -660,6 +713,7 @@ function renderToday(){
       save(state); renderToday(); toast(v.trim() ? "Заметка сохранена" : "Заметка удалена");
     }, "Например: «плечо хрустит — вес не выше 40»");
   }));
+  document.getElementById("swapDay").onclick = pickDay;
   document.getElementById("finish").onclick = () => {
     const done = s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0);
     if(!done){ toast("Пока ни одного подхода не отмечено"); return; }
