@@ -1,4 +1,4 @@
-const PLAN = {
+﻿const PLAN = {
   версия: 3,
   шаг: 2.5,
   отдых: 90,
@@ -40,7 +40,7 @@ const PLAN = {
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
-const VERSION = "3.1";
+const VERSION = "3.2";
 
 /* Экранирование для сборки HTML строками. Всё, что пришло из импорта, плана или заметок,
    выводится только через esc(): иначе чужой JSON исполняет скрипт в этом origin. */
