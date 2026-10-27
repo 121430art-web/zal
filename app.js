@@ -40,7 +40,7 @@
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
-const VERSION = "3.2";
+const VERSION = "3.3";
 
 /* Экранирование для сборки HTML строками. Всё, что пришло из импорта, плана или заметок,
    выводится только через esc(): иначе чужой JSON исполняет скрипт в этом origin. */
@@ -346,7 +346,7 @@ let manualPlan = null;
 
 const fmtDate = d => new Date(d).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"});
 const todayKey = () => new Date().toISOString().slice(0,10);
-const planFor = wd => P().дни.find(d => d.wd.includes(wd));
+const planFor = wd => (P().дни || []).find(d => d.wd && d.wd.includes(wd));
 const P = () => state.план || PLAN;
 const round = (x, step) => Math.round(x / step) * step;
 
@@ -544,6 +544,19 @@ function renderToday(){
   if(!plan){
     let n = null;
     for(let i=1;i<=7;i++){ const p = planFor((wd+i)%7); if(p){ n = {p, через:i}; break; } }
+    /* План есть, но ни один день недели не находится — план повреждён. Чиним сами. */
+    if(!n){
+      title.textContent = "План повреждён";
+      sub.textContent = "восстановление одним нажатием";
+      app.innerHTML = '<section class="card"><div class="empty">План на телефоне в старом формате.<br>История тренировок сохранится — вернёт стандартный план.</div>' +
+        '<button class="btn" id="repairPlan" style="margin-top:12px">Восстановить план</button></section>';
+      document.getElementById("repairPlan").onclick = () => {
+        state.план = JSON.parse(JSON.stringify(PLAN));
+        save(state); render(); toast("План восстановлен");
+      };
+      return;
+    }
+    
     title.textContent = "Отдых";
     sub.textContent = new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"});
     app.innerHTML = `<section class="card">
