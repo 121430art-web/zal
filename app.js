@@ -40,7 +40,7 @@
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
-const VERSION = "3.4";
+const VERSION = "3.5";
 
 /* Экранирование для сборки HTML строками. Всё, что пришло из импорта, плана или заметок,
    выводится только через esc(): иначе чужой JSON исполняет скрипт в этом origin. */
@@ -336,11 +336,29 @@ const load = () => { try { const s = JSON.parse(localStorage.getItem(KEY)); retu
 const save = s => localStorage.setItem(KEY, JSON.stringify(s));
 let state = load();
 if(!state.заметки) state.заметки = {};
-/* новый стандартный план подставляем, только если свой план не правили руками */
-if(!state.план || (!state.план.свой && state.план.версия !== PLAN.версия)){
-  state.план = JSON.parse(JSON.stringify(PLAN));
-  save(state);
-}
+/* Жёсткая починка плана (v3.5): любая битая структура — дни без wd, без группы,
+   с пустыми упражнениями, неполный набор дней — заменяется стандартным планом.
+   Кастомные названия упражнений сохраняем по id. */
+(function(){
+  const validDay = d => d && Array.isArray(d.wd) && d.wd.length &&
+    typeof d.группа === "string" && d.группа.trim() &&
+    Array.isArray(d.упражнения) && d.упражнения.length &&
+    d.упражнения.every(e => e && e.id && e.имя && +e.подходы > 0);
+  const days = state.план && state.план.дни;
+  const ok = Array.isArray(days) && days.length >= 3 && days.every(validDay) &&
+    [2,4,6,0].every(w => days.some(d => d.wd.includes(w)));
+  if(!ok){
+    const старыеИмена = {};
+    (days || []).forEach(d => (d.упражнения || []).forEach(e => {
+      if(e && e.id && e.имя) старыеИмена[e.id] = e.имя;
+    }));
+    state.план = JSON.parse(JSON.stringify(PLAN));
+    state.план.дни.forEach(d => d.упражнения.forEach(e => {
+      if(старыеИмена[e.id] && старыеИмена[e.id] !== e.имя) e.имя = старыеИмена[e.id] + " (" + e.имя + ")";
+    }));
+    save(state);
+  }
+})();
 let tab = "today";
 let manualPlan = null;
 
