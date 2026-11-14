@@ -40,7 +40,7 @@
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
-const VERSION = "3.5";
+const VERSION = "3.7";
 
 /* Экранирование для сборки HTML строками. Всё, что пришло из импорта, плана или заметок,
    выводится только через esc(): иначе чужой JSON исполняет скрипт в этом origin. */
@@ -53,11 +53,20 @@ const csvCell = v => { const s = String(v ?? ""); return /^[=+\-@\t\r]/.test(s) 
    а это защита от падения рендера на чужом файле с полями не того типа. */
 function cleanState(d){
   const s = (v, max = 200) => (typeof v === "string" ? v.slice(0, max) : (typeof v === "number" && isFinite(v) ? v : ""));
-  const n = (v, def = "") => { const x = +v; return isFinite(x) ? x : def; };
+  /* Пустая строка, null и undefined остаются пустыми: +"" === 0, а ноль соврёт про референс. */
+  const n = (v, def = "") => {
+    if(v === null || v === undefined) return def;
+    if(typeof v === "string" && v.trim() === "") return def;
+    const x = +v;
+    return isFinite(x) ? x : def;
+  };
   const arr = v => Array.isArray(v) ? v : [];
   const sessions = arr(d.sessions).map(x => ({
     дата: s(x && x.дата, 10),
     группа: s(x && x.группа, 60),
+    /* Сессия, закрытая кнопкой «Закончить», после круга выгрузка → импорт остаётся закрытой. */
+    завершено: !!(x && x.завершено),
+    завершено_в: n(x && x.завершено_в, null),
     упражнения: arr(x && x.упражнения).map(e => ({
       id: s(e && e.id, 60),
       имя: s(e && e.имя, 120),
@@ -83,6 +92,18 @@ function cleanState(d){
       };
     });
 
+  /* Анализы: необязательный список, введённый вручную. Пустые границы остаются пустыми,
+     а не нулём: иначе «без референса» превратится в «выше». */
+  const анализы = arr(d.анализы).map((x, i) => ({
+    id: s(x && x.id, 40) || "a" + (Date.now() + i),
+    дата: s(x && x.дата, 10),
+    пок: s(x && x.пок, 80),
+    знач: n(x && x.знач),
+    ед: s(x && x.ед, 20),
+    низ: n(x && x.низ),
+    верх: n(x && x.верх)
+  })).filter(x => x.пок && x.знач !== "");
+
   const план = (d.план && Array.isArray(d.план.дни) ? d.план.дни : []).map(day => ({
     wd: arr(day && day.wd).map(x => n(x, null)).filter(x => x !== null && x >= 0 && x <= 6),
     группа: s(day && day.группа, 60),
@@ -102,7 +123,8 @@ function cleanState(d){
       .filter(x => x.дата && x.кг !== ""),
     план: план.length ? { ...state.план, свой: true, дни: план } : state.план,
     заметки,
-    дни
+    дни,
+    анализы
   };
 }
 
@@ -360,6 +382,10 @@ if(!state.заметки) state.заметки = {};
   }
 })();
 let tab = "today";
+/* Подраздел вкладки «Прогресс»: обзор | упражнения | объём. Живёт отдельно от tab. */
+let pseg = "обзор";
+/* Подраздел вкладки «Медик»: сводка | анализы | справочник. Тоже отдельно от tab. */
+let mseg = "сводка";
 let manualPlan = null;
 
 const fmtDate = d => new Date(d).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"});
@@ -587,6 +613,28 @@ function renderToday(){
   }
   const s = ensureSession(plan);
   title.textContent = plan.группа[0].toUpperCase() + plan.группа.slice(1);
+  /* Сессия закрыта кнопкой «Закончить» — показываем итог, а не упражнения с галочками.
+     Сессии без поля «завершено» считаются открытыми. */
+  if(s.завершено === true){
+    const подходы = s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0);
+    const тоннаж = s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово && +p.вес > 0)
+      .reduce((m,p) => m + (+p.вес) * (+p.повторы || 0), 0), 0);
+    sub.innerHTML = `${new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"})}
+      · <span class="pill">закрыта</span>`;
+    app.innerHTML = `<section class="card">
+      <div class="exhead"><div class="exname">Тренировка закрыта</div><div class="plan">${esc(s.группа || plan.группа)}</div></div>
+      <div style="font-size:15px">Сделано: ${подходы} подходов · тоннаж ${(Math.round(тоннаж/100)/10).toFixed(1).replace(".", ",")} т</div>
+      <button class="btn" id="reopen" style="margin-top:14px">Вернуться к записям</button>
+      <div class="hint muted" style="margin-top:10px">Данные уже в истории. Завтра будет новая тренировка.</div>
+    </section>`;
+    document.getElementById("reopen").onclick = () => {
+      delete s.завершено;
+      delete s.завершено_в;
+      save(state);
+      renderToday();
+    };
+    return;
+  }
   const doneEx = s.упражнения.filter(e => e.подходы.every(p => p.готово)).length;
   sub.innerHTML = `${new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"})}
     · <span class="pill">${doneEx}/${s.упражнения.length} готово</span>`;
@@ -658,110 +706,159 @@ function renderToday(){
   document.getElementById("finish").onclick = () => {
     const done = s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0);
     if(!done){ toast("Пока ни одного подхода не отмечено"); return; }
+    /* Закрываем сессию в данных, а не только на экране: иначе возврат на «Сегодня»
+       рисует ту же тренировку с галочками, будто она не закончилась. */
+    s.завершено = true;
+    s.завершено_в = Date.now();
+    save(state);
     toast(`Готово: ${done} подходов. Данные на телефоне`);
     tab = "progress"; render();
   };
 }
 const ex_верх = (plan, id) => { const ex = plan.упражнения.find(x => x.id === id); return ex ? String(ex.верх) : ""; };
 
+/* Вкладка «Прогресс»: переключатель подразделов сверху, внутри всегда одна мысль.
+   Состояние — pseg, вкладку tab не трогаем. Клики вешаем после вставки innerHTML:
+   CSP script-src 'self' не пропускает inline-обработчики. */
 function renderProgress(){
   const app = document.getElementById("app");
   document.getElementById("title").textContent = "Прогресс";
   const sessions = state.sessions.filter(s => s.упражнения.some(e => e.подходы.some(p => p.готово)));
   document.getElementById("subtitle").innerHTML = `тренировок: ${sessions.length}`;
 
+  /* Точки по упражнениям: лучший вес за тренировку, его повторы и объём. */
   const byEx = new Map();
   sessions.forEach(s => s.упражнения.forEach(e => {
     const done = e.подходы.filter(p => p.готово && +p.вес > 0);
     if(!done.length) return;
     const vol = done.reduce((n,p) => n + (+p.вес) * (+p.повторы || 0), 0);
+    const top = done.reduce((a,p) => +p.вес > +a.вес ? p : a, done[0]);
     if(!byEx.has(e.id)) byEx.set(e.id, {имя:e.имя, точки:[]});
-    byEx.get(e.id).точки.push({дата:s.дата, best:Math.max(...done.map(p => +p.вес)), vol});
+    byEx.get(e.id).точки.push({дата:s.дата, best:+top.вес, повторы:+top.повторы || 0, vol});
   }));
 
-  let html = "";
+  const SEGS = [["обзор","Обзор"], ["упражнения","Упражнения"], ["объём","Объём"]];
+  let html = `<div class="seg">${SEGS.map(([k, l]) =>
+    `<button data-pseg="${k}" class="${pseg === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
 
-  /* --- сводка за 4 недели --- */
-  const done = sessions.map(s => ({
-    дата: s.дата,
-    тоннаж: s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово && +p.вес > 0)
-      .reduce((m,p) => m + (+p.вес) * (+p.повторы || 0), 0), 0),
-    подходы: s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0)
-  })).filter(x => x.подходы > 0);
-  const weeks = new Map();
-  done.forEach(x => {
-    const d = new Date(x.дата + "T12:00:00");
-    const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    const k = mon.toISOString().slice(0,10);
-    const w = weeks.get(k) || {тоннаж:0, тренировок:0, подходы:0};
-    w.тоннаж += x.тоннаж; w.тренировок++; w.подходы += x.подходы;
-    weeks.set(k, w);
-  });
-  const wkeys = [...weeks.keys()].sort().slice(-6);
-  const wmax = Math.max(1, ...wkeys.map(k => weeks.get(k).тоннаж));
-  const last4 = wkeys.slice(-4);
-  const тоннаж4 = last4.reduce((n,k) => n + weeks.get(k).тоннаж, 0);
-  const тр4 = last4.reduce((n,k) => n + weeks.get(k).тренировок, 0);
-  const пд4 = last4.reduce((n,k) => n + weeks.get(k).подходы, 0);
+  if(pseg === "обзор"){
+    /* сводка за 4 недели */
+    const done = sessions.map(s => ({
+      дата: s.дата,
+      тоннаж: s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово && +p.вес > 0)
+        .reduce((m,p) => m + (+p.вес) * (+p.повторы || 0), 0), 0),
+      подходы: s.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0)
+    })).filter(x => x.подходы > 0);
+    const weeks = new Map();
+    done.forEach(x => {
+      const d = new Date(x.дата + "T12:00:00");
+      const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      const k = mon.toISOString().slice(0,10);
+      const w = weeks.get(k) || {тоннаж:0, тренировок:0, подходы:0};
+      w.тоннаж += x.тоннаж; w.тренировок++; w.подходы += x.подходы;
+      weeks.set(k, w);
+    });
+    const wkeys = [...weeks.keys()].sort().slice(-6);
+    const wmax = Math.max(1, ...wkeys.map(k => weeks.get(k).тоннаж));
+    const last4 = wkeys.slice(-4);
+    const тоннаж4 = last4.reduce((n,k) => n + weeks.get(k).тоннаж, 0);
+    const тр4 = last4.reduce((n,k) => n + weeks.get(k).тренировок, 0);
+    const пд4 = last4.reduce((n,k) => n + weeks.get(k).подходы, 0);
+    const lastS = sessions.slice().sort((a,b) => a.дата < b.дата ? -1 : 1).pop();
+    const подх = lastS ? lastS.упражнения.reduce((n,e) => n + e.подходы.filter(p => p.готово).length, 0) : 0;
 
-  if(done.length){
+    html += `<div class="tiles">
+      <div class="tile"><b>${тр4}</b><span class="k">тренировок</span></div>
+      <div class="tile"><b>${Math.round(тоннаж4/1000)}</b><span class="k">тоннаж, т</span></div>
+      <div class="tile"><b>${пд4}</b><span class="k">подходов</span></div>
+    </div>`;
+
+    if(wkeys.length > 1){
+      html += `<section class="card">
+        <div class="exhead"><div class="exname">Тоннаж по неделям</div><div class="plan">${wkeys.length} нед.</div></div>
+        <div class="hist">${wkeys.map(k => `<div class="hbar">
+          <span>${fmtDate(k)}</span><span class="bar"><i style="width:${Math.round(weeks.get(k).тоннаж/wmax*100)}%"></i></span>
+          <span>${Math.round(weeks.get(k).тоннаж/1000)} т</span></div>`).join("")}</div>
+      </section>`;
+    }
+
+    html += lastS
+      ? `<div class="k" style="margin:0 2px 12px">последняя: ${fmtDate(lastS.дата)}, ${esc(lastS.группа)}, ${подх} подходов</div>`
+      : `<div class="card"><div class="empty">Пока пусто. Отметь первый подход — и здесь появятся цифры.</div></div>`;
+
+  } else if(pseg === "упражнения"){
+    if(!byEx.size){
+      html += `<div class="card"><div class="empty">Пока пусто. Отметь первый подход — и здесь появится история по упражнениям.</div></div>`;
+    } else {
+      const items = [...byEx.entries()].map(([id, v]) => {
+        const точки = v.точки.slice().sort((a,b) => a.дата < b.дата ? -1 : a.дата > b.дата ? 1 : 0);
+        return { id, имя: v.имя, точки, last: точки[точки.length-1] };
+      }).sort((a,b) => a.last.дата < b.last.дата ? 1 : a.last.дата > b.last.дата ? -1 : 0);
+
+      html += `<section class="card">` + items.map((it, i) => {
+        const pts = it.точки.slice(-6);
+        const max = Math.max(...pts.map(p => p.vol)) || 1;
+        const best = Math.max(...it.точки.map(p => p.best));
+        /* оценка 1ПМ по формуле Эпли: вес × (1 + повторы / 30) */
+        let rm = 0;
+        sessions.forEach(s => s.упражнения.filter(e => e.id === it.id).forEach(e =>
+          e.подходы.filter(p => p.готово && +p.вес > 0 && +p.повторы > 0).forEach(p => {
+            const est = (+p.вес) * (1 + (+p.повторы) / 30);
+            if(est > rm) rm = est;
+          })));
+        return `<div class="exrow" data-pdet="${i}">
+          <div><div class="exname">${esc(it.имя)}</div>
+            <div class="k">последний ${esc(it.last.best)} кг${it.last.повторы ? " × " + esc(it.last.повторы) : ""}</div></div>
+          <div class="plan">рекорд ${esc(best)} кг</div>
+          <span class="chev">▸</span>
+        </div>
+        <div class="exdet" id="pd${i}">
+          <div class="hist">${pts.map(p => `<div class="hbar">
+            <span>${fmtDate(p.дата)}</span>
+            <span class="bar"><i style="width:${Math.round(p.vol/max*100)}%"></i></span>
+            <span>${p.vol}</span></div>`).join("")}</div>
+          <div class="k" style="margin-top:8px">последний раз ${fmtDate(it.last.дата)}${rm ? ` · оценка 1ПМ ≈ ${Math.round(rm*2)/2} кг` : ""}</div>
+        </div>`;
+      }).join("") + `</section>`;
+    }
+  } else {
+    /* объём за неделю по группам мышц — из текущего плана */
+    const groups = {};
+    P().дни.forEach(d => d.упражнения.forEach(e => {
+      const g = e.гр || "прочее";
+      groups[g] = (groups[g] || 0) + e.подходы;
+    }));
+    const gmax = Math.max(20, ...Object.values(groups));
     html += `<section class="card">
-      <div class="exhead"><div class="exname">Итоги</div><div class="plan">за 4 недели</div></div>
-      <div class="hist">
-        <div class="hbar"><span>тренировок</span><span class="bar"><i style="width:${Math.min(100, тр4/12*100)}%"></i></span><span>${тр4}</span></div>
-        <div class="hbar"><span>тоннаж</span><span class="bar"><i style="width:100%"></i></span><span>${Math.round(тоннаж4/1000)} т</span></div>
-        <div class="hbar"><span>подходов</span><span class="bar"><i style="width:${Math.min(100, пд4/200*100)}%"></i></span><span>${пд4}</span></div>
-      </div>
-      ${wkeys.length > 1 ? `<div class="hist" style="margin-top:12px">${wkeys.map(k => `<div class="hbar">
-        <span>${fmtDate(k)}</span><span class="bar"><i style="width:${Math.round(weeks.get(k).тоннаж/wmax*100)}%"></i></span>
-        <span>${Math.round(weeks.get(k).тоннаж/1000)} т</span></div>`).join("")}</div>` : ""}
+      <div class="exhead"><div class="exname">Объём за неделю</div><div class="plan">подходов</div></div>
+      <div class="hint muted">Рабочая зона 8–20 подходов на группу в неделю. Ниже 8 — роста почти нет, выше 20 — лишняя усталость.</div>
+      ${Object.entries(groups).map(([g, n]) => {
+        const ok = n >= 8 && n <= 20;
+        return `<div class="vrow"><span class="vt">${esc(g)}</span>
+          <span class="bar"><i style="width:${Math.round(n/gmax*100)}%;background:${ok ? "var(--ok)" : "var(--warn)"}"></i></span>
+          <span>${esc(n)}${ok ? "" : n < 8 ? " ⚠" : " ↑"}</span></div>`;
+      }).join("")}
     </section>`;
   }
 
-  /* объём за неделю по группам мышц — из текущего плана */
-  const groups = {};
-  P().дни.forEach(d => d.упражнения.forEach(e => {
-    const g = e.гр || "прочее";
-    groups[g] = (groups[g] || 0) + e.подходы;
-  }));
-  const gmax = Math.max(20, ...Object.values(groups));
-  html += `<section class="card">
-    <div class="exhead"><div class="exname">Объём за неделю</div><div class="plan">подходов</div></div>
-    <div class="hint muted">Рабочая зона 8–20 подходов на группу в неделю. Ниже 8 — роста почти нет, выше 20 — лишняя усталость.</div>
-    ${Object.entries(groups).map(([g, n]) => {
-      const ok = n >= 8 && n <= 20;
-      return `<div class="vrow"><span class="vt">${esc(g)}</span>
-        <span class="bar"><i style="width:${Math.round(n/gmax*100)}%;background:${ok ? "var(--ok)" : "var(--warn)"}"></i></span>
-        <span>${esc(n)}${ok ? "" : n < 8 ? " ⚠" : " ↑"}</span></div>`;
-    }).join("")}
-  </section>`;
-
-  if(!sessions.length){
-    html += `<div class="card"><div class="empty">Пока пусто. Отметь первый подход — и здесь появится история.</div></div>`;
-  } else {
-    html += [...byEx.entries()].map(([id, v]) => {
-      const pts = v.точки.slice(-6);
-      const max = Math.max(...pts.map(p => p.vol)) || 1;
-      const last = pts[pts.length-1];
-      const best = Math.max(...v.точки.map(p => p.best));
-      /* оценка 1ПМ по формуле Эпли: вес × (1 + повторы / 30) */
-      let rm = 0;
-      sessions.forEach(s => s.упражнения.filter(e => e.id === id).forEach(e =>
-        e.подходы.filter(p => p.готово && +p.вес > 0 && +p.повторы > 0).forEach(p => {
-          const est = (+p.вес) * (1 + (+p.повторы) / 30);
-          if(est > rm) rm = est;
-        })));
-      return `<section class="card">
-        <div class="exhead"><div class="exname">${esc(v.имя)}</div><div class="plan">рекорд ${esc(best)} кг</div></div>
-        <div class="hint muted">последний раз ${fmtDate(last.дата)} · объём ${last.vol} кг${rm ? ` · оценка 1ПМ ≈ ${Math.round(rm*2)/2} кг` : ""}</div>
-        <div class="hist">${pts.map(p => `<div class="hbar">
-          <span>${fmtDate(p.дата)}</span>
-          <span class="bar"><i style="width:${Math.round(p.vol/max*100)}%"></i></span>
-          <span>${p.vol}</span></div>`).join("")}</div>
-      </section>`;
-    }).join("");
-  }
   app.innerHTML = html;
+
+  /* Обработчики — только после вставки разметки: inline onclick CSP не пропустит. */
+  app.querySelectorAll("[data-pseg]").forEach(b => b.addEventListener("click", () => {
+    pseg = b.dataset.pseg;
+    renderProgress();
+  }));
+
+  if(pseg === "упражнения"){
+    app.querySelectorAll("[data-pdet]").forEach(row => row.addEventListener("click", () => {
+      const det = document.getElementById("pd" + row.dataset.pdet);
+      if(!det) return;
+      /* Раскрытие классом, без перерисовки: прокрутка на телефоне не прыгает. */
+      const open = det.classList.toggle("show");
+      const chev = row.querySelector(".chev");
+      if(chev) chev.textContent = open ? "▾" : "▸";
+    }));
+  }
 }
 
 function renderScience(){
@@ -798,17 +895,70 @@ function renderScience(){
   Поясница и допустимые веса — только с лечащим врачом. Полный разбор с 63 источниками — в файле наука.md.</div></section>`;
 }
 
+/* Вкладка «Медик»: три подраздела тем же приёмом, что в «Прогрессе». Состояние — mseg,
+   вкладку tab не трогаем. Интерпретации нет: только сравнение введённого значения
+   с границами из бланка. Норм «от себя» приложение не знает. */
+const анализЧисло = v => (v === "" || v === null || v === undefined || !isFinite(+v)) ? null : +v;
+function анализСтатус(a){
+  const низ = анализЧисло(a.низ), верх = анализЧисло(a.верх), v = +a.знач;
+  if(низ === null && верх === null) return { текст:"без референса", цвет:"var(--muted)" };
+  if(низ !== null && v < низ) return { текст:"ниже", цвет:"var(--warn)" };
+  if(верх !== null && v > верх) return { текст:"выше", цвет:"var(--warn)" };
+  return { текст:"в норме", цвет:"var(--ok)" };
+}
+const анализЗнач = a => `${String(a.знач).replace(".", ",")}${a.ед ? " " + a.ед : ""}`;
+function анализРеф(a){
+  const низ = анализЧисло(a.низ), верх = анализЧисло(a.верх);
+  const n = x => String(x).replace(".", ",");
+  if(низ !== null && верх !== null) return `${n(низ)}–${n(верх)}`;
+  if(низ !== null) return `от ${n(низ)}`;
+  if(верх !== null) return `до ${n(верх)}`;
+  return "без референса";
+}
+/* Строки списка — по показателю, свежие выше; внутри показателя записи от новых к старым. */
+function анализГруппы(){
+  const map = new Map();
+  (state.анализы || []).forEach(a => {
+    if(!a || !a.пок || String(a.знач) === "") return;
+    const k = String(a.пок).trim().toLowerCase();
+    if(!map.has(k)) map.set(k, { имя: String(a.пок).trim(), записи: [] });
+    map.get(k).записи.push(a);
+  });
+  return [...map.values()].map(g => {
+    g.записи.sort((x, y) => x.дата < y.дата ? 1 : x.дата > y.дата ? -1 : 0);
+    g.последняя = g.записи[0];
+    return g;
+  }).sort((a, b) => a.последняя.дата < b.последняя.дата ? 1 : a.последняя.дата > b.последняя.дата ? -1 : 0);
+}
+
 function renderMedic(){
   const app = document.getElementById("app");
   document.getElementById("title").textContent = "Медик";
   document.getElementById("subtitle").textContent = "личный контроль здоровья";
+
+  const MSEGS = [["сводка","Сводка"], ["анализы","Анализы"], ["справочник","Справочник"]];
+  let html = `<div class="seg">${MSEGS.map(([k, l]) =>
+    `<button data-mseg="${k}" class="${mseg === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
+
+  const группы = анализГруппы();
+  const внеРеф = (state.анализы || []).filter(a => {
+    if(!a || !a.пок || String(a.знач) === "") return false;
+    const t = анализСтатус(a).текст;
+    return t === "ниже" || t === "выше";
+  }).length;
 
   const days = state.дни || {};
   const keys = Object.keys(days).sort().slice(-7);
   const num = v => +v || 0;
   const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
   const sleep = avg(keys.map(k => num(days[k].сон)).filter(Boolean));
-  const prot = avg(keys.map(k => num(days[k].белок)).filter(Boolean));
+  /* С версии 3.0 пишутся «белок_еда» и «белок_добавка». Старое «белок» — только запасной
+     вариант, если новых полей нет: иначе итог за неделю всегда был 0. */
+  const белокДня = d => {
+    const есть = (d.белок_еда !== "" && d.белок_еда != null) || (d.белок_добавка !== "" && d.белок_добавка != null);
+    return есть ? (+d.белок_еда || 0) + (+d.белок_добавка || 0) : (+d.белок || 0);
+  };
+  const prot = avg(keys.map(k => белокДня(days[k])).filter(Boolean));
   const w = state.вес && state.вес.length ? state.вес[state.вес.length - 1] : null;
   const norm = w ? Math.round(1.6 * w.кг) : null;
   const week = Date.now() - 7 * 864e5;
@@ -864,46 +1014,117 @@ function renderMedic(){
     "что я хочу понять: успокоиться, найти причину или получить план"
   ].map(t => `<li>${t}</li>`).join("");
 
-  app.innerHTML = `
-  <section class="card">
-    <div class="exhead"><div class="exname">Мои цифры за неделю</div><div class="plan">${keys.length ? keys.length + " дн." : "нет данных"}</div></div>
-    ${row("сон", sleep ? sleep + " ч" : "—", sleep && sleep < 7 ? "мало" : "")}
-    ${row("белок", prot ? prot + " г" : "—", norm ? "норма около " + norm + " г" : "")}
-    ${row("вес", w ? w.кг + " кг" : "—", w ? fmtDate(w.дата) : "")}
-    ${row("тренировок за 7 дней", sess)}
-    <div class="hint muted" style="margin-top:8px">Берётся из блока «День» и журнала тренировок. Пусто — значит не заполнено.</div>
-  </section>
+  if(mseg === "сводка"){
+    html += `<section class="card">
+      <div class="exhead"><div class="exname">Мои цифры за неделю</div><div class="plan">${keys.length ? keys.length + " дн." : "нет данных"}</div></div>
+      ${row("сон", sleep ? sleep + " ч" : "—", sleep && sleep < 7 ? "мало" : "")}
+      ${row("белок", prot ? prot + " г" : "—", norm ? "норма около " + norm + " г" : "")}
+      ${row("вес", w ? w.кг + " кг" : "—", w ? fmtDate(w.дата) : "")}
+      ${row("тренировок за 7 дней", sess)}
+      ${внеРеф ? row("анализов вне референса", внеРеф) : ""}
+      <div class="hint muted" style="margin-top:8px">Берётся из блока «День» и журнала тренировок. Пусто — значит не заполнено.</div>
+    </section>`;
+  } else if(mseg === "анализы"){
+    html += `<button class="btn" id="aAdd" style="margin-bottom:12px">+ Добавить анализ</button>`;
+    if(!группы.length){
+      html += `<section class="card"><div class="empty">Пока нет анализов. Внеси цифры из бланка — приложение покажет тренд и сравнит с твоим референсом.</div></section>`;
+    } else {
+      html += `<section class="card">` + группы.map((g, i) => {
+        const last = g.последняя, st = анализСтатус(last);
+        return `<div class="arow" data-adet="${i}">
+          <div><div class="exname">${esc(g.имя)}</div>
+            <div class="aval">${esc(анализЗнач(last))} · ${esc(fmtDate(last.дата))}</div></div>
+          <span class="pill" style="color:${st.цвет}">${esc(st.текст)}</span>
+          <span class="chev">▸</span>
+        </div>
+        <div class="adet" id="ad${i}">
+          <div class="ahist">${g.записи.slice(0, 8).map(a => `<div class="arow">
+            <span>${esc(fmtDate(a.дата))} · ${esc(анализЗнач(a))} · ${esc(анализРеф(a))}</span>
+            <span></span>
+            <span class="del" data-adel="${esc(a.id)}">✕</span>
+          </div>`).join("")}</div>
+        </div>`;
+      }).join("") + `</section>`;
+    }
+    html += `<div class="k" style="margin:0 2px 12px">Сравнение с референсом, который введён вручную, а не диагноз. Норму берём из бланка своей лаборатории.</div>`;
+  } else {
+    /* Справочник: заголовок карточки остаётся, список живёт в details.
+       Красные флаги раскрыты: это то, что нельзя искать тапом. */
+    const refCard = (имя, план, hint, list, open) => `<section class="card">
+      <div class="exhead"><div class="exname">${имя}</div><div class="plan">${план}</div></div>
+      ${hint ? `<div class="hint muted">${hint}</div>` : ""}
+      <details class="ref"${open ? " open" : ""}><summary>Открыть список</summary><ul>${list}</ul></details>
+    </section>`;
+    html += refCard("Красные флаги", "к врачу сразу",
+      "Это не «понаблюдать». С таким идут в приёмное отделение или вызывают скорую.", flags, true);
+    html += refCard("Раз в год: базовый набор", "чек-лист",
+      "Не назначение. Список того, что обсуждают с врачом, чтобы не забыть.", annual, false);
+    html += refCard("Дома: что мерить", "без гаджетов", "", home, false);
+    html += refCard("Как читать анализы", "правила", "", reading, false);
+    html += refCard("Что спросит дотошный медик", "до выводов", "", questions, false);
+    html += `<section class="card"><div class="hint muted">Раздел собран по открытым клиническим рекомендациям и служит памяткой,
+    а не заключением. Диагноз и лечение — только с врачом, который видит анализы и тебя целиком.
+    Красные флаги не обсуждаются в чате — с ними едут в больницу.</div></section>`;
+  }
 
-  <section class="card">
-    <div class="exhead"><div class="exname">Красные флаги</div><div class="plan">к врачу сразу</div></div>
-    <div class="hint muted">Это не «понаблюдать». С таким идут в приёмное отделение или вызывают скорую.</div>
-    <ul>${flags}</ul>
-  </section>
+  app.innerHTML = html;
 
-  <section class="card">
-    <div class="exhead"><div class="exname">Раз в год: базовый набор</div><div class="plan">чек-лист</div></div>
-    <div class="hint muted">Не назначение. Список того, что обсуждают с врачом, чтобы не забыть.</div>
-    <ul>${annual}</ul>
-  </section>
+  /* Обработчики — только после вставки разметки: CSP script-src 'self' не пропустит inline. */
+  app.querySelectorAll("[data-mseg]").forEach(b => b.addEventListener("click", () => {
+    mseg = b.dataset.mseg;
+    renderMedic();
+  }));
 
-  <section class="card">
-    <div class="exhead"><div class="exname">Дома: что мерить</div><div class="plan">без гаджетов</div></div>
-    <ul>${home}</ul>
-  </section>
+  if(mseg === "анализы"){
+    document.getElementById("aAdd").onclick = () => {
+      form("Новый анализ", [
+        { label: "Дата", value: todayKey(), type: "date" },
+        { label: "Показатель (как в бланке)", value: "" },
+        { label: "Значение", value: "", type: "number" },
+        { label: "Единица", value: "" },
+        { label: "Референс, от", value: "", type: "number" },
+        { label: "Референс, до", value: "", type: "number" }
+      ], ([дата, пок, знач, ед, низ, верх]) => {
+        /* Запятая вместо точки — обычный ввод на телефоне. Пустая граница остаётся
+           пустой строкой: ноль сломал бы «без референса». */
+        const ч = v => String(v == null ? "" : v).replace(",", ".").trim();
+        const число = v => ч(v) === "" || !isFinite(+ч(v)) ? "" : +ч(v);
+        if(!String(пок == null ? "" : пок).trim() || ч(знач) === "" || !isFinite(+ч(знач))){
+          toast("Нужны показатель и значение"); return;
+        }
+        state.анализы = state.анализы || [];
+        state.анализы.push({
+          id: "a" + Date.now(),
+          дата: (ч(дата).slice(0, 10) || todayKey()),
+          пок: String(пок).trim().slice(0, 60),
+          знач: +ч(знач),
+          ед: String(ед == null ? "" : ед).trim().slice(0, 20),
+          низ: число(низ),
+          верх: число(верх)
+        });
+        save(state); renderMedic(); toast("Анализ добавлен");
+      }, "Цифры — из бланка своей лаборатории");
+    };
 
-  <section class="card">
-    <div class="exhead"><div class="exname">Как читать анализы</div><div class="plan">правила</div></div>
-    <ul>${reading}</ul>
-  </section>
+    app.querySelectorAll("[data-adet]").forEach(r => r.addEventListener("click", () => {
+      const det = document.getElementById("ad" + r.dataset.adet);
+      if(!det) return;
+      /* Раскрытие классом, без перерисовки: прокрутка на телефоне не прыгает. */
+      const open = det.classList.toggle("show");
+      const chev = r.querySelector(".chev");
+      if(chev) chev.textContent = open ? "▾" : "▸";
+    }));
 
-  <section class="card">
-    <div class="exhead"><div class="exname">Что спросит дотошный медик</div><div class="plan">до выводов</div></div>
-    <ul>${questions}</ul>
-  </section>
-
-  <section class="card"><div class="hint muted">Раздел собран по открытым клиническим рекомендациям и служит памяткой,
-  а не заключением. Диагноз и лечение — только с врачом, который видит анализы и тебя целиком.
-  Красные флаги не обсуждаются в чате — с ними едут в больницу.</div></section>`;
+    app.querySelectorAll("[data-adel]").forEach(x => x.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const id = x.dataset.adel;
+      const a = (state.анализы || []).find(y => y && y.id === id);
+      ask("Удалить запись?", a ? `${a.пок}: ${анализЗнач(a)} от ${a.дата}. Восстановить не получится.` : "Восстановить не получится.", () => {
+        state.анализы = (state.анализы || []).filter(y => !y || y.id !== id);
+        save(state); renderMedic(); toast("Запись удалена");
+      });
+    }));
+  }
 }
 
 function renderPlan(){
@@ -1143,6 +1364,13 @@ function renderSettings(){
       `## Вес тела`,
       ...(state.вес || []).slice(-6).map(x => `- ${fmtDate(x.дата)}: ${x.кг} кг`),
       ``,
+      `## Анализы`,
+      ...(list => list.length ? list : ["- пока нет"])((state.анализы || [])
+        .filter(a => a && a.пок)
+        .sort((a, b) => a.дата < b.дата ? -1 : a.дата > b.дата ? 1 : 0)
+        .slice(-10)
+        .map(a => `- ${a.дата}, ${a.пок}, ${анализЗнач(a)} (${анализРеф(a)})`)),
+      ``,
       `## Дни (сон / белок / часы)`,
       ...Object.entries(state.дни || {}).slice(-7).map(([dt, v]) =>
         `- ${fmtDate(dt)}: сон ${v.сон || "—"} ч, белок ${v.белок || "—"} г${(v.белок_еда || v.белок_добавка) ? ` (еда ${v.белок_еда || 0} + добавка ${v.белок_добавка || 0})` : ""}, ${v.мин || "—"} мин, пульс ${v.пульс || "—"}, ${v.ккал || "—"} ккал`)
@@ -1174,7 +1402,7 @@ function renderSettings(){
   };
   document.getElementById("reset").onclick = () => {
     ask("Стереть всю историю?", "Тренировки, замеры веса и заметки удалятся. План останется.", () => {
-      state = {sessions:[], вес:[], план:state.план, заметки:{}, дни:{}};
+      state = {sessions:[], вес:[], план:state.план, заметки:{}, дни:{}, анализы:[]};
       save(state); render(); toast("История стёрта");
     });
   };

@@ -1,5 +1,5 @@
 ﻿/* Кэш приложения. Версию меняем при обновлении файлов. */
-const CACHE = "zal-v7";
+const CACHE = "zal-v9";
 const FILES = ["./", "./index.html", "./app.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
