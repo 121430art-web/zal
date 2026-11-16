@@ -38,7 +38,7 @@
 };
 const KEY = "zal.v2";
 const TKEY = "zal.timer";
-const VERSION = "3.13";
+const VERSION = "3.14";
 
 /* Экранирование для сборки HTML строками. Всё, что пришло из импорта, плана или заметок,
    выводится только через esc(): иначе чужой JSON исполняет скрипт в этом origin. */
@@ -119,6 +119,11 @@ function cleanState(d){
     sessions,
     вес: arr(d.вес).map(x => ({ дата: s(x && x.дата, 10), кг: n(x && x.кг), ts: n(x && x.ts) }))
       .filter(x => x.дата && x.кг !== ""),
+    замеры: arr(d.замеры).map(x => ({
+      дата: s(x && x.дата, 10),
+      плечи: n(x && x.плечи), грудь: n(x && x.грудь), талия: n(x && x.талия),
+      бёдра: n(x && x.бёдра), бицепс: n(x && x.бицепс), бедро: n(x && x.бедро)
+    })).filter(x => x.дата),
     план: план.length ? { ...state.план, свой: true, дни: план } : state.план,
     заметки,
     дни,
@@ -372,10 +377,11 @@ const МИФЫ = [
   ["Тренировка до отказа обязательна", "RIR 1–2 дают тот же результат"],
   ["Малые веса — рельеф, большие — масса", "при равном усилии 5–30 повторов дают сходный рост"]
 ];
-const load = () => { try { const s = JSON.parse(localStorage.getItem(KEY)); return s && s.sessions ? s : {sessions:[], вес:[]} } catch(e){ return {sessions:[], вес:[]} } };
+const load = () => { try { const s = JSON.parse(localStorage.getItem(KEY)); return s && s.sessions ? s : {sessions:[], вес:[], замеры:[]} } catch(e){ return {sessions:[], вес:[], замеры:[]} } };
 const save = s => localStorage.setItem(KEY, JSON.stringify(s));
 let state = load();
 if(!state.заметки) state.заметки = {};
+if(!state.замеры) state.замеры = [];
 /* Жёсткая починка плана (v3.5): любая битая структура — дни без wd, без группы,
    с пустыми упражнениями, неполный набор дней — заменяется стандартным планом.
    Кастомные названия упражнений сохраняем по id. */
@@ -1077,12 +1083,15 @@ function анализГруппы(){
   }).sort((a, b) => a.последняя.дата < b.последняя.дата ? 1 : a.последняя.дата > b.последняя.дата ? -1 : 0);
 }
 
+/* Обхваты: раз в неделю, см. Талия — чем меньше, тем лучше, у остальных наоборот. */
+const ОБХВ = [["плечи","плечи"],["грудь","грудь"],["талия","талия"],["бёдра","бёдра"],["бицепс","бицепс"],["бедро","бедро"]];
+
 function renderMedic(){
   const app = document.getElementById("app");
   document.getElementById("title").textContent = "Медик";
   document.getElementById("subtitle").textContent = "личный контроль здоровья";
 
-  const MSEGS = [["сводка","Сводка"], ["анализы","Анализы"], ["справочник","Справочник"]];
+  const MSEGS = [["сводка","Сводка"], ["тело","Тело"], ["анализы","Анализы"], ["справочник","Справочник"]];
   let html = `<div class="seg">${MSEGS.map(([k, l]) =>
     `<button data-mseg="${k}" class="${mseg === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
 
@@ -1170,6 +1179,78 @@ function renderMedic(){
       ${внеРеф ? row("анализов вне референса", внеРеф) : ""}
       <div class="hint muted" style="margin-top:8px">Берётся из блока «День» и журнала тренировок. Пусто — значит не заполнено.</div>
     </section>`;
+  } else if(mseg === "тело"){
+    /* Вес и обхваты. Жили в «Ещё», теперь рядом с анализами: это те же цифры здоровья. */
+    const allW = (state.вес || []).slice().sort((a,b) =>
+      (a.ts || 0) - (b.ts || 0) || (a.дата < b.дата ? -1 : a.дата > b.дата ? 1 : 0));
+    const по = new Map();
+    allW.forEach(x => по.set(x.дата, x));
+    const wDays = [...по.values()].slice(-14);
+    const maxW = Math.max(...wDays.map(x => x.кг), 1);
+    const minW = Math.min(...wDays.map(x => x.кг), maxW - 1);
+    const wLine = wDays.length > 1 ? wDays.map((x,i) => {
+      const X = 10 + i * (280 / (wDays.length - 1));
+      const Y = 100 - ((x.кг - minW) / Math.max(1, maxW - minW)) * 80;
+      return `${X.toFixed(1)},${Y.toFixed(1)}`;
+    }).join(" ") : "";
+    const wLast = allW[allW.length - 1];
+    const wRows = allW.slice(-8).reverse().map(x => {
+      const idx = allW.indexOf(x);
+      const prev = idx > 0 ? allW[idx-1] : null;
+      const dd = prev ? (x.кг - prev.кг) : 0;
+      const ds = prev ? (dd > 0 ? "+" : "") + dd.toFixed(1).replace(".", ",") : "—";
+      const dt = new Date(x.ts || (x.дата + "T12:00:00"));
+      return `<div class="wrow"><span>${dt.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"})}
+        ${x.ts ? dt.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}) : ""}</span>
+        <span>${esc(String(x.кг).replace(".", ","))} кг</span>
+        <span class="${dd < 0 ? "down" : dd > 0 ? "up" : ""}">${esc(ds)}</span></div>`;
+    }).join("");
+
+    const замеры = (state.замеры || []).slice().sort((a,b) => a.дата < b.дата ? -1 : a.дата > b.дата ? 1 : 0);
+    const lastM = замеры[замеры.length - 1];
+    const cellM = (x, k, prev, inv) => {
+      if(x[k] === "" || x[k] === undefined || x[k] === null) return "—";
+      let out = esc(String(x[k]).replace(".", ","));
+      if(prev && prev[k] !== "" && prev[k] !== undefined){
+        const dd = (+x[k]) - (+prev[k]);
+        if(Math.abs(dd) >= 0.1){
+          const good = inv ? dd < 0 : dd > 0;
+          out += ` <span class="${good ? "down" : "up"}">(${dd > 0 ? "+" : ""}${dd.toFixed(1).replace(".", ",")})</span>`;
+        }
+      }
+      return out;
+    };
+    const mrows = замеры.slice(-8).reverse().map(x => {
+      const i = замеры.indexOf(x);
+      const prev = i > 0 ? замеры[i-1] : null;
+      const талия = cellM(x,"талия",prev,true);
+      const v = (+x.плечи) && (+x.талия) ? (+x.плечи / +x.талия).toFixed(2).replace(".", ",") : "—";
+      return `<div class="wrow"><span>${fmtDate(x.дата)}</span>
+        <span>плечи ${cellM(x,"плечи",prev)} · талия ${талия}</span>
+        <span>плечи/талия ${v}</span></div>
+        <div class="k" style="padding:0 0 8px">грудь ${cellM(x,"грудь",prev)} · бёдра ${cellM(x,"бёдра",prev)} · бицепс ${cellM(x,"бицепс",prev)} · бедро ${cellM(x,"бедро",prev)}</div>`;
+    }).join("");
+
+    html += `<section class="card">
+      <div class="exhead"><div class="exname">Вес тела</div><div class="plan">${wLast ? esc(String(wLast.кг).replace(".", ",")) + " кг" : "нет данных"}</div></div>
+      <div class="bwbox">
+        <input type="number" id="bw" step="0.1" min="30" max="250" placeholder="кг" inputmode="decimal">
+        <button class="btn ghost" id="bwAdd" style="width:auto">Записать</button>
+      </div>
+      ${wRows ? `<div class="hist">${wRows}</div>` : `<div class="k" style="margin-top:8px">Пока нет замеров</div>`}
+      ${wDays.length > 1 ? `<svg class="chart" viewBox="0 0 300 110" preserveAspectRatio="none">
+        <polyline fill="none" stroke="#5b9cff" stroke-width="2" points="${wLine}"/></svg>
+        <div class="k">${fmtDate(wDays[0].дата)} → ${fmtDate(wDays[wDays.length-1].дата)}</div>` : `<div class="k" style="margin-top:8px">Добавь два замера — появится график</div>`}
+    </section>
+    <section class="card">
+      <div class="exhead"><div class="exname">Обхваты, см</div><div class="plan">раз в неделю</div></div>
+      <div class="hint muted">Меряй утром натощак, одной лентой. Плечи — по самой широкой точке, грудь — по соскам, талия — по пупку, бёдра — по ягодицам, бицепс — напряжённый, бедро — по середине. Для V-силуэта: плечи вверх, талия вниз.</div>
+      <div class="bwbox" style="flex-wrap:wrap">
+        ${ОБХВ.map(([k, t]) => `<input type="number" id="m_${k}" step="0.5" min="20" max="200" placeholder="${t}" inputmode="decimal" value="${esc(lastM && lastM[k] !== undefined ? lastM[k] : "")}">`).join("")}
+        <button class="btn ghost" id="mAdd" style="width:auto">Записать</button>
+      </div>
+      ${mrows ? `<div class="hist">${mrows}</div>` : `<div class="k" style="margin-top:8px">Пока нет замеров</div>`}
+    </section>`;
   } else if(mseg === "анализы"){
     html += `<button class="btn" id="aAdd" style="margin-bottom:12px">+ Добавить анализ</button>`;
     if(!группы.length){
@@ -1220,6 +1301,41 @@ function renderMedic(){
     mseg = b.dataset.mseg;
     renderMedic();
   }));
+
+  if(mseg === "тело"){
+    const bwBtn = document.getElementById("bwAdd");
+    if(bwBtn) bwBtn.onclick = () => {
+      const inp = document.getElementById("bw");
+      const v = +inp.value;
+      if(!v || v < 30 || v > 250){ toast("Введи вес в кг"); return; }
+      state.вес = state.вес || [];
+      state.вес.push({ дата: todayKey(), кг: v, ts: Date.now() });
+      save(state);
+      renderMedic();
+      const fresh = document.getElementById("bw");
+      if(fresh) fresh.focus();
+    };
+    const mBtn = document.getElementById("mAdd");
+    if(mBtn) mBtn.onclick = () => {
+      const rec = { дата: todayKey() };
+      let any = false;
+      ОБХВ.forEach(([k]) => {
+        const el = document.getElementById("m_" + k);
+        const v = el && el.value !== "" ? +el.value : 0;
+        if(v >= 20 && v <= 200){ rec[k] = v; any = true; }
+      });
+      if(!any){ toast("Введи хотя бы один обхват в см"); return; }
+      state.замеры = state.замеры || [];
+      /* Раз в неделю: если замер за эту неделю уже есть — обновляем его, а не плодим дубль. */
+      const wkKey = dk => { const t = new Date(dk + "T12:00:00"); t.setDate(t.getDate() - ((t.getDay()+6)%7)); return t.toISOString().slice(0,10); };
+      const thisWk = wkKey(rec.дата);
+      const idx = state.замеры.findIndex(x => wkKey(x.дата) === thisWk);
+      if(idx >= 0){ state.замеры[idx] = Object.assign({}, state.замеры[idx], rec); toast("Обновил замер этой недели"); }
+      else { state.замеры.push(rec); toast("Замер записан"); }
+      save(state);
+      renderMedic();
+    };
+  }
 
   if(mseg === "анализы"){
     document.getElementById("aAdd").onclick = () => {
@@ -1352,45 +1468,14 @@ function renderSettings(){
   document.getElementById("title").textContent = "Ещё";
   document.getElementById("subtitle").textContent = "данные только на этом телефоне";
 
-  const bw = state.вес || [];
   const dayKey = todayKey();
   const d = (state.дни && state.дни[dayKey]) || {};
-  const all = (state.вес || []).slice().sort((a,b) =>
-    (a.ts || 0) - (b.ts || 0) || (a.дата < b.дата ? -1 : a.дата > b.дата ? 1 : 0));
-  const byDay = new Map();
-  all.forEach(x => byDay.set(x.дата, x));
-  const days = [...byDay.values()].slice(-14);
-  const pts = days.map(x => x.кг);
-  const maxW = Math.max(...pts, 1), minW = Math.min(...pts, maxW - 1);
-  const line = days.length > 1 ? days.map((x,i) => {
-    const X = 10 + i * (280 / (days.length - 1));
-    const Y = 100 - ((x.кг - minW) / Math.max(1, maxW - minW)) * 80;
-    return `${X.toFixed(1)},${Y.toFixed(1)}`;
-  }).join(" ") : "";
-  const last = all[all.length-1];
-  const rows = all.slice(-8).reverse().map((x, i, arr) => {
-    const idx = all.indexOf(x);
-    const prev = idx > 0 ? all[idx-1] : null;
-    const d = prev ? (x.кг - prev.кг) : 0;
-    const ds = prev ? (d > 0 ? "+" : "") + d.toFixed(1).replace(".", ",") : "—";
-    const dt = new Date(x.ts || (x.дата + "T12:00:00"));
-    return `<div class="wrow"><span>${dt.toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"})}
-      ${x.ts ? dt.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}) : ""}</span>
-      <span>${esc(String(x.кг).replace(".", ","))} кг</span>
-      <span class="${d < 0 ? "down" : d > 0 ? "up" : ""}">${esc(ds)}</span></div>`;
-  }).join("");
 
   app.innerHTML = `
     <section class="card">
-      <div class="exhead"><div class="exname">Вес тела</div><div class="plan">${last ? esc(String(last.кг).replace(".", ",")) + " кг" : "нет данных"}</div></div>
-      <div class="bwbox">
-        <input type="number" id="bw" step="0.1" min="30" max="250" placeholder="кг" inputmode="decimal">
-        <button class="btn ghost" id="bwAdd" style="width:auto">Записать</button>
-      </div>
-      ${rows ? `<div class="hist">${rows}</div>` : `<div class="k" style="margin-top:8px">Пока нет замеров</div>`}
-      ${days.length > 1 ? `<svg class="chart" viewBox="0 0 300 110" preserveAspectRatio="none">
-        <polyline fill="none" stroke="#5b9cff" stroke-width="2" points="${line}"/></svg>
-        <div class="k">${fmtDate(days[0].дата)} → ${fmtDate(days[days.length-1].дата)}</div>` : `<div class="k" style="margin-top:8px">Добавь два замера — появится график</div>`}
+      <div class="exhead"><div class="exname">Вес и обхваты</div><div class="plan">в Медике</div></div>
+      <div class="hint muted">Журнал тела переехал: вкладка «Медик», раздел «Тело». Там же график веса и обхваты по неделям.</div>
+      <button class="btn ghost" id="goBody" style="margin-top:10px">Открыть</button>
     </section>
     <section class="card">
       <div class="exhead"><div class="exname">Калькулятор блинов</div><div class="plan">гриф 20 кг</div></div>
@@ -1431,7 +1516,7 @@ function renderSettings(){
     </section>
     <section class="card">
       <div class="exhead"><div class="exname">Сброс</div></div>
-      <div class="hint">Удалит всю историю и замеры веса.</div>
+      <div class="hint">Удалит тренировки, вес, обхваты, заметки и анализы.</div>
       <button class="btn ghost" id="reset">Стереть всё</button>
     </section>
     <section class="card">
@@ -1446,17 +1531,7 @@ function renderSettings(){
       <button class="btn ghost" id="upd">Проверить обновление</button>
     </section>`;
 
-  document.getElementById("bwAdd").onclick = () => {
-    const inp = document.getElementById("bw");
-    const v = +inp.value;
-    if(!v || v < 30 || v > 250){ toast("Введи вес в кг"); return; }
-    state.вес = state.вес || [];
-    state.вес.push({ дата: todayKey(), кг: v, ts: Date.now() });
-    save(state);
-    renderSettings();
-    const fresh = document.getElementById("bw");
-    if(fresh) fresh.focus();
-  };
+  document.getElementById("goBody").onclick = () => { tab = "medic"; mseg = "тело"; render(); };
   const download = (name, text, mime) => {
     const blob = new Blob([text], { type: mime });
     const a = document.createElement("a");
@@ -1510,6 +1585,15 @@ function renderSettings(){
       `## Вес тела`,
       ...(state.вес || []).slice(-6).map(x => `- ${fmtDate(x.дата)}: ${x.кг} кг`),
       ``,
+      `## Обхваты, см`,
+      ...(list => list.length ? list : ["- пока нет"])((state.замеры || [])
+        .slice().sort((a, b) => a.дата < b.дата ? -1 : a.дата > b.дата ? 1 : 0)
+        .slice(-6)
+        .map(x => `- ${fmtDate(x.дата)}: ` + ОБХВ
+          .filter(([k]) => x[k] !== undefined && x[k] !== "")
+          .map(([k]) => `${k} ${String(x[k]).replace(".", ",")}`)
+          .join(", "))),
+      ``,
       `## Анализы`,
       ...(list => list.length ? list : ["- пока нет"])((state.анализы || [])
         .filter(a => a && a.пок)
@@ -1547,8 +1631,8 @@ function renderSettings(){
     r.readAsText(f);
   };
   document.getElementById("reset").onclick = () => {
-    ask("Стереть всю историю?", "Тренировки, замеры веса и заметки удалятся. План останется.", () => {
-      state = {sessions:[], вес:[], план:state.план, заметки:{}, дни:{}, анализы:[]};
+    ask("Стереть всю историю?", "Тренировки, вес, обхваты, заметки и анализы удалятся. План останется.", () => {
+      state = {sessions:[], вес:[], замеры:[], план:state.план, заметки:{}, дни:{}, анализы:[]};
       save(state); render(); toast("История стёрта");
     });
   };
