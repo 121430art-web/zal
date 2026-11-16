@@ -1,6 +1,6 @@
 ﻿/* Кэш приложения. Версию меняем при обновлении файлов. */
-const CACHE = "zal-v16";
-const FILES = ["./", "./index.html", "./app.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
+const CACHE = "zal-v17";
+const FILES = ["./", "./index.html", "./app.js?v=3.14", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

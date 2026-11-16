@@ -1708,7 +1708,7 @@ document.querySelectorAll(".nav button").forEach(b => b.addEventListener("click"
 render();
 
 if("serviceWorker" in navigator && location.protocol === "https:"){
-  navigator.serviceWorker.register("sw.js").then(reg => {
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
     /* Новая версия нашлась — подхватываем сразу, без «удали и поставь заново». */
     reg.addEventListener("updatefound", () => {
       const sw = reg.installing;
